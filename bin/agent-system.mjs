@@ -74,6 +74,15 @@ async function main() {
     case 'memory-learn':
       handleMemoryLearn(workspace, flags);
       return;
+    case 'backup':
+      handleBackup(workspace, flags, positional);
+      return;
+    case 'restore':
+      handleRestore(workspace, flags, positional);
+      return;
+    case 'bundle':
+      handleBundle(workspace, flags, positional);
+      return;
     case 'export':
       handleExport(workspace, flags, positional);
       return;
@@ -277,6 +286,9 @@ function printHelp() {
     '    packs    Generate or list host learning packs',
     '    suggest  Propose memory promotions from change lessons',
     '    learn    Auto-promote repeated lessons into higher memory scopes',
+    '  backup    Snapshot the current mutable workspace state',
+    '  restore   Restore a previously captured backup snapshot',
+    '  bundle    Validate, diff, or prune backup bundles',
     '  status     Read or update live agent presence',
     '    show     Print the current presence snapshot',
     '    who      Print the active session summary',
@@ -1149,6 +1161,89 @@ function handleExport(workspace, flags, positional) {
   console.log(`Exported ${profileName} to ${outputPath}`);
 }
 
+function handleBackup(workspace, flags, positional) {
+  const profileName = flags.profile || workspace.activeProfileName;
+  const hostName = normalizeHostName(flags.host || workspace.activeHostName);
+  const bundle = buildBackupBundle(workspace, profileName, hostName);
+  const defaultOutput = workspace.manifest.backup?.defaultOutput || `${profileName}-backup.json`;
+  const outputPath = positional[0] || path.join(workspace.repoRoot, defaultOutput);
+  fs.writeFileSync(outputPath, JSON.stringify(bundle, null, 2) + '\n', 'utf8');
+  console.log(`Backed up ${profileName} to ${outputPath}`);
+}
+
+function handleRestore(workspace, flags, positional) {
+  const inputPath = flags.files?.[0] || positional[0];
+  if (!inputPath) {
+    console.error('Usage: agent-system restore --file <bundle.json>');
+    process.exit(1);
+  }
+  const absolutePath = path.isAbsolute(inputPath) ? inputPath : path.resolve(workspace.repoRoot, inputPath);
+  const bundle = readJson(absolutePath);
+  const validation = validateBackupBundle(bundle, workspace.repoRoot);
+  if (!validation.ok) {
+    console.log(renderBackupValidation(validation));
+    process.exit(1);
+  }
+
+  let restored;
+  try {
+    restored = restoreBackupBundle(workspace.repoRoot, bundle);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+  const restoredWorkspace = loadWorkspace(restored.profileName, restored.activeHost);
+  const lint = buildLintReport(restoredWorkspace);
+  if (!lint.ok) {
+    console.log(renderBackupValidation(validation));
+    console.log('[RESTORE LINT]');
+    for (const item of lint.items) {
+      console.log(`- ${item}`);
+    }
+    process.exit(1);
+  }
+
+  console.log(`Restored ${restored.profileName} to ${workspace.repoRoot}`);
+}
+
+function handleBundle(workspace, flags, positional) {
+  const action = positional[0];
+  const inputPath = flags.files?.[0] || positional[1];
+  if (!action) {
+    console.error('Usage: agent-system bundle <validate|diff|prune> --file <bundle.json>');
+    process.exit(1);
+  }
+  if (!inputPath) {
+    console.error('Usage: agent-system bundle <validate|diff|prune> --file <bundle.json>');
+    process.exit(1);
+  }
+
+  const absolutePath = path.isAbsolute(inputPath) ? inputPath : path.resolve(workspace.repoRoot, inputPath);
+  const bundle = readJson(absolutePath);
+
+  switch (action) {
+    case 'validate': {
+      const report = validateBackupBundle(bundle, workspace.repoRoot);
+      console.log(renderBackupValidation(report));
+      process.exit(report.ok ? 0 : 1);
+    }
+    case 'diff': {
+      const report = diffBackupBundle(workspace.repoRoot, bundle);
+      console.log(renderBackupDiff(report));
+      return;
+    }
+    case 'prune': {
+      const report = pruneBackupBundle(bundle);
+      fs.writeFileSync(absolutePath, JSON.stringify(bundle, null, 2) + '\n', 'utf8');
+      console.log(renderBackupPrune(report, absolutePath));
+      return;
+    }
+    default:
+      console.error(`Unknown bundle action: ${action}`);
+      process.exit(1);
+  }
+}
+
 function handleImport(workspace, flags, positional) {
   const inputPath = flags.files?.[0] || positional[0];
   if (!inputPath) {
@@ -1244,6 +1339,7 @@ function buildLintReport(workspace) {
     ['status snapshot exists', () => fs.existsSync(workspace.statusCurrentPath)],
     ['status event log exists', () => fs.existsSync(workspace.statusEventsPath)],
     ['change schema exists', () => fs.existsSync(workspace.changeSchemaPath)],
+    ['backup schema exists', () => fs.existsSync(path.join(workspace.repoRoot, workspace.manifest.backup?.schema || 'docs/backup-schema.md'))],
     ['change snapshot exists', () => fs.existsSync(workspace.changeCurrentPath)],
     ['change history exists', () => fs.existsSync(workspace.changeHistoryPath)],
     ['change readme exists', () => fs.existsSync(workspace.changeReadmePath)],
@@ -1297,6 +1393,31 @@ function buildExportBundle(workspace, profileName) {
   return bundle;
 }
 
+function buildBackupBundle(workspace, profileName, hostName) {
+  const exportBundle = buildExportBundle(workspace, profileName);
+  return {
+    kind: 'agent-system-backup',
+    backupVersion: 1,
+    createdAt: exportBundle.exportedAt,
+    activeProfile: profileName,
+    activeHost: normalizeHostName(hostName || workspace.activeHostName),
+    manifest: exportBundle.manifest,
+    profile: exportBundle.profile,
+    profileDoc: exportBundle.profileDoc,
+    memory: exportBundle.memory,
+    change: {
+      current: readChangeCurrent(workspace),
+      history: readChangeHistory(workspace),
+    },
+    status: {
+      current: readStatusCurrent(workspace),
+      events: readStatusEvents(workspace),
+    },
+    memoryIndex: exportBundle.memoryIndex,
+    files: collectBackupFiles(workspace.repoRoot),
+  };
+}
+
 function importBundle(repoRoot, bundle) {
   const profileName = bundle?.profile?.profile || bundle?.profile?.name || 'imported-profile';
   const targetProfileDir = path.join(repoRoot, 'profiles', profileName);
@@ -1338,6 +1459,250 @@ function importBundle(repoRoot, bundle) {
     writeOptionalText(path.join(repoRoot, bundle.manifest?.status?.events || 'status/events.jsonl'), bundle.status.events);
   }
   return { profileName };
+}
+
+function restoreBackupBundle(repoRoot, bundle) {
+  const profileName = bundle?.activeProfile || bundle?.profile?.profile || bundle?.profile?.name || 'imported-profile';
+  const activeHost = normalizeHostName(bundle?.activeHost || bundle?.host || process.env.AGENT_SYSTEM_HOST || 'qwen');
+  const entries = bundle?.files && typeof bundle.files === 'object' ? bundle.files : {};
+  if (Object.keys(entries).length === 0) {
+    throw new Error('backup bundle missing file snapshots');
+  }
+  writeBackupEntries(repoRoot, entries);
+
+  return { profileName, activeHost };
+}
+
+function validateBackupBundle(bundle, repoRoot = process.cwd()) {
+  const issues = [];
+  if (!bundle || typeof bundle !== 'object') {
+    return { ok: false, issues: ['bundle is not an object'] };
+  }
+  if (bundle.kind !== 'agent-system-backup') issues.push('kind must be agent-system-backup');
+  if (bundle.backupVersion !== 1) issues.push('backupVersion must be 1');
+  if (!isFilled(bundle.activeProfile)) issues.push('activeProfile missing');
+  if (!isFilled(bundle.activeHost)) issues.push('activeHost missing');
+  if (!bundle.manifest || typeof bundle.manifest !== 'object') issues.push('manifest missing');
+  if (!bundle.profile || typeof bundle.profile !== 'object') issues.push('profile missing');
+  if (!isFilled(bundle.profileDoc)) issues.push('profileDoc missing');
+  if (!bundle.memory || typeof bundle.memory !== 'object') issues.push('memory missing');
+  if (!bundle.change || typeof bundle.change !== 'object') issues.push('change missing');
+  if (!bundle.status || typeof bundle.status !== 'object') issues.push('status missing');
+  if (!bundle.files || typeof bundle.files !== 'object') issues.push('files missing');
+
+  const requiredFiles = [
+    'agent-system.json',
+    'package.json',
+    'README.md',
+    'AGENTS.md',
+    'docs/backup-schema.md',
+    'docs/baselines/agent-system.mjs.md',
+    `profiles/${bundle.activeProfile || bundle.profile?.profile || 'imphub'}/profile.json`,
+    `profiles/${bundle.activeProfile || bundle.profile?.profile || 'imphub'}/AGENTS.md`,
+  ];
+  for (const file of requiredFiles) {
+    if (!Object.prototype.hasOwnProperty.call(bundle.files || {}, file)) {
+      issues.push(`missing file snapshot: ${file}`);
+    }
+  }
+
+  if (!bundle.change?.current || typeof bundle.change.current !== 'object') issues.push('change.current missing');
+  if (!Array.isArray(bundle.change?.history)) issues.push('change.history missing');
+  if (!bundle.status?.current || typeof bundle.status.current !== 'object') issues.push('status.current missing');
+  if (!Array.isArray(bundle.status?.events)) issues.push('status.events missing');
+
+  const manifestPath = path.join(repoRoot, 'agent-system.json');
+  if (fs.existsSync(manifestPath) && bundle.files?.['agent-system.json'] && typeof bundle.files['agent-system.json'] === 'object') {
+    if (normalizeNewlines(JSON.stringify(bundle.files['agent-system.json'].value || {}, null, 2)) !== normalizeNewlines(JSON.stringify(readJson(manifestPath), null, 2))) {
+      issues.push('manifest snapshot does not match current repo manifest');
+    }
+  }
+
+  return { ok: issues.length === 0, issues };
+}
+
+function diffBackupBundle(repoRoot, bundle) {
+  const currentProfile = readCurrentProfileName(repoRoot);
+  const currentHost = normalizeHostName(process.env.AGENT_SYSTEM_HOST || 'qwen');
+  const changed = [];
+  const currentFiles = collectBackupFiles(repoRoot);
+  const bundleFiles = bundle?.files && typeof bundle.files === 'object' ? bundle.files : {};
+
+  if ((bundle.activeProfile || bundle.profile?.profile || '') !== currentProfile) {
+    changed.push(`profile: ${currentProfile} -> ${bundle.activeProfile || bundle.profile?.profile || 'unknown'}`);
+  }
+  if ((bundle.activeHost || bundle.host || '') !== currentHost) {
+    changed.push(`host: ${currentHost} -> ${bundle.activeHost || bundle.host || 'unknown'}`);
+  }
+
+  const fileNames = new Set([...Object.keys(currentFiles), ...Object.keys(bundleFiles)]);
+  for (const file of fileNames) {
+    const currentText = normalizeBackupEntryText(currentFiles[file]);
+    const bundleText = normalizeBackupEntryText(bundleFiles[file]);
+    if (currentText !== bundleText) {
+      changed.push(`file: ${file}`);
+    }
+  }
+
+  return { profileName: bundle.activeProfile || bundle.profile?.profile || 'unknown', changed };
+}
+
+function pruneBackupBundle(bundle) {
+  let pruned = 0;
+  const touched = [];
+  const pruneField = (container, key) => {
+    if (!container || typeof container[key] !== 'string') return;
+    const next = pruneMarkdownBullets(container[key]);
+    if (next !== container[key]) {
+      container[key] = next;
+      pruned += 1;
+      touched.push(key);
+    }
+  };
+
+  pruneField(bundle.memory, 'system');
+  pruneField(bundle.memory, 'profile');
+  pruneField(bundle.memory, 'change');
+  pruneField(bundle.memory, 'packs');
+  for (const host of Object.keys(bundle.memory?.host || {})) {
+    pruneField(bundle.memory.host, host);
+  }
+  pruneField(bundle, 'profileDoc');
+  pruneField(bundle.change, 'history');
+  pruneField(bundle.status, 'events');
+
+  if (bundle.files && typeof bundle.files === 'object') {
+    for (const [file, entry] of Object.entries(bundle.files)) {
+      if (typeof entry === 'string') {
+        const next = pruneMarkdownBullets(entry);
+        if (next !== entry) {
+          bundle.files[file] = next;
+          pruned += 1;
+          touched.push(file);
+        }
+      }
+    }
+  }
+
+  return { pruned, touched };
+}
+
+function renderBackupValidation(report) {
+  const lines = [];
+  lines.push('[BUNDLE VALIDATE]');
+  lines.push(`Ready: ${report.ok ? 'yes' : 'no'}`);
+  if (report.issues.length > 0) {
+    lines.push('Issues:');
+    for (const issue of report.issues) {
+      lines.push(`- ${issue}`);
+    }
+  }
+  return lines.join('\n');
+}
+
+function renderBackupDiff(report) {
+  const lines = [];
+  lines.push('[BUNDLE DIFF]');
+  lines.push(`Profile: ${report.profileName}`);
+  lines.push(`Changed: ${report.changed.length}`);
+  for (const item of report.changed) {
+    lines.push(`- ${item}`);
+  }
+  return lines.join('\n');
+}
+
+function renderBackupPrune(report, filePath) {
+  const lines = [];
+  lines.push('[BUNDLE PRUNE]');
+  lines.push(`Wrote: ${filePath}`);
+  lines.push(`Pruned: ${report.pruned}`);
+  if (report.touched.length > 0) {
+    lines.push('Touched:');
+    for (const item of report.touched) {
+      lines.push(`- ${item}`);
+    }
+  }
+  return lines.join('\n');
+}
+
+function collectBackupFiles(repoRoot) {
+  const include = [];
+  for (const file of walkFiles(repoRoot)) {
+    if (!shouldIncludeBackupFile(repoRoot, file)) continue;
+    include.push(path.relative(repoRoot, file));
+  }
+  include.sort((left, right) => left.localeCompare(right));
+  const files = {};
+  for (const relative of include) {
+    files[relative] = serializeBackupEntry(path.join(repoRoot, relative));
+  }
+  return files;
+}
+
+function shouldIncludeBackupFile(repoRoot, filePath) {
+  const relative = path.relative(repoRoot, filePath).replace(/\\/g, '/');
+  if (!relative || relative.startsWith('.git/') || relative === '.git') return false;
+  if (relative.startsWith('node_modules/') || relative.startsWith('.worktrees/')) return false;
+  if (/-backup\.json$/i.test(relative)) return false;
+  return true;
+}
+
+function serializeBackupEntry(filePath) {
+  const text = fs.readFileSync(filePath, 'utf8');
+  if (filePath.endsWith('.json')) {
+    return { kind: 'json', value: JSON.parse(text) };
+  }
+  return text;
+}
+
+function writeBackupEntries(repoRoot, entries) {
+  for (const [relative, entry] of Object.entries(entries)) {
+    const targetPath = path.join(repoRoot, relative);
+    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+    if (entry && typeof entry === 'object' && entry.kind === 'json') {
+      fs.writeFileSync(targetPath, JSON.stringify(entry.value, null, 2) + '\n', 'utf8');
+    } else if (entry && typeof entry === 'object' && typeof entry.text === 'string') {
+      fs.writeFileSync(targetPath, entry.text, 'utf8');
+    } else if (typeof entry === 'string') {
+      fs.writeFileSync(targetPath, entry, 'utf8');
+    }
+  }
+}
+
+function normalizeBackupEntryText(entry) {
+  if (typeof entry === 'string') return normalizeNewlines(entry);
+  if (entry && typeof entry === 'object' && entry.kind === 'json') {
+    return normalizeNewlines(JSON.stringify(entry.value, null, 2));
+  }
+  if (entry && typeof entry === 'object' && typeof entry.text === 'string') {
+    return normalizeNewlines(entry.text);
+  }
+  return '';
+}
+
+function readCurrentProfileName(repoRoot) {
+  const manifest = readJson(path.join(repoRoot, 'agent-system.json'));
+  return manifest.profileDiscovery?.defaultProfile || 'imphub';
+}
+
+function pruneMarkdownBullets(text) {
+  const lines = String(text || '').split(/\r?\n/);
+  const seen = new Set();
+  const output = [];
+  for (const line of lines) {
+    const normalized = line.trim();
+    if (!normalized) {
+      output.push(line);
+      continue;
+    }
+    if (normalized.startsWith('- ')) {
+      const key = normalized.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+    }
+    output.push(line);
+  }
+  return output.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd() + '\n';
 }
 
 function searchMemoryFiles(repoRoot, query) {

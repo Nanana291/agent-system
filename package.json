@@ -1,6 +1,6 @@
 {
   "name": "agent-system",
-  "version": "0.4.6.5",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "description": "Agent-system CLI for validation, routing, sync, memory, and profile maintenance.",
@@ -47,6 +47,11 @@
     "change-gate": "node ./bin/agent-system.mjs change gate",
     "memory-capture": "node ./bin/agent-system.mjs memory capture change",
     "change-memory-suggest": "node ./bin/agent-system.mjs change memory-suggest",
+    "backup": "node ./bin/agent-system.mjs backup",
+    "restore": "node ./bin/agent-system.mjs restore",
+    "bundle-validate": "node ./bin/agent-system.mjs bundle validate",
+    "bundle-diff": "node ./bin/agent-system.mjs bundle diff",
+    "bundle-prune": "node ./bin/agent-system.mjs bundle prune",
     "export": "node ./bin/agent-system.mjs export",
     "import": "node ./bin/agent-system.mjs import"
   }

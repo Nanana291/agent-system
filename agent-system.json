@@ -1,6 +1,6 @@
 {
   "name": "agent-system",
-  "version": "0.4.6.5",
+  "version": "0.5.0",
   "schemaVersion": 1,
   "purpose": "Universal route, ownership, handoff, and delivery-gate scaffold that complements Superpowers.",
   "superpowersIntegration": {
@@ -74,5 +74,9 @@
     "readme": "change/README.md",
     "schema": "docs/change-schema.md",
     "intakeTemplate": "templates/change-intake.md"
+  },
+  "backup": {
+    "schema": "docs/backup-schema.md",
+    "defaultOutput": "<profile>-backup.json"
   }
 }

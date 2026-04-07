@@ -44,12 +44,15 @@ Durable rules should be written where they belong first, then kept inside the ho
 - `status watch` renders live presence lines for terminal use.
 - `status heartbeat`, `status who`, and `status attach` extend the presence layer into a simple session tracker.
 - The canonical human-facing format is `[AGENT] <name> | <action> | <elapsed>`.
+- `backup` captures the full mutable workspace into one portable bundle.
+- `restore` writes a validated backup bundle back into the workspace and then runs post-restore validation.
+- `bundle validate`, `bundle diff`, and `bundle prune` inspect or clean backup bundles without touching live state.
 - `change/current.json`, `change/history.jsonl`, and `change/intake.md` support a universal change workflow for updates and new projects.
 - `change analyze`, `change scout`, `change auto-scaffold`, `change scaffold`, `change preview`, `change apply`, `change diff`, `change rollback`, and `change gate` are the change workflow entry points.
 - `change memory-suggest` proposes durable lessons to promote from change memory.
 - `memory/change/<host>.md` stores auto-captured lessons from change gates before promotion into that same host's memory file.
 - `memory learn` auto-promotes repeated change lessons into the active host's memory file during a successful gate.
 
-## V0.1 intent
+## V0.5 intent
 
-This is a bootstrap scaffold: enough structure to enforce routing and artifacts without trying to automate every decision.
+This release adds portable recovery on top of the routing and memory scaffold: the repo can snapshot the mutable workspace, validate the bundle, prune duplicate noise, and restore the state back into a clean checkout without losing host ownership.

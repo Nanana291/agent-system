@@ -67,9 +67,9 @@ Short form:
 qwen extensions install Nanana291/agent-system
 ```
 
-## V0.4.6.5 scope
+## V0.5.0 scope
 
-This release adds a host memory refinement loop on top of host-scoped learning. The change workflow still scouts repo changes, auto-scaffolds an intake, previews gate readiness, applies or rolls back a change snapshot, and auto-promotes repeated lessons into the active host's memory file. The refinement layer now reviews, compresses, teaches, reflects, and packages host lessons without crossing host boundaries.
+This release adds portable backup and restore on top of the existing change, status, and host-memory workflows. The repository can now snapshot its mutable state into a single validated bundle, diff it against the live workspace, prune duplicate noise from the bundle, and restore it back into a clean checkout with post-restore validation.
 
 ## Memory layer
 
@@ -126,6 +126,11 @@ node ./bin/agent-system.mjs change rollback
 node ./bin/agent-system.mjs change gate
 node ./bin/agent-system.mjs memory capture change
 node ./bin/agent-system.mjs change memory-suggest
+node ./bin/agent-system.mjs backup ./agent-system-backup.json
+node ./bin/agent-system.mjs restore --file ./agent-system-backup.json
+node ./bin/agent-system.mjs bundle validate --file ./agent-system-backup.json
+node ./bin/agent-system.mjs bundle diff --file ./agent-system-backup.json
+node ./bin/agent-system.mjs bundle prune --file ./agent-system-backup.json
 node ./bin/agent-system.mjs export --profile imphub
 node ./bin/agent-system.mjs import --file ./agent-system-export.json
 ```
