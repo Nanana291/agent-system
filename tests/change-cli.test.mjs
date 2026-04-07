@@ -211,6 +211,37 @@ test('change gate captures memory automatically on success', () => {
   }
 });
 
+test('change gate seeds host reflection and learning packs for the active host', () => {
+  const workspace = createWorkspace();
+  try {
+    const scaffold = runChange([
+      'scaffold',
+      '--type', 'update',
+      '--target', 'bin/agent-system.mjs',
+      '--intent', 'seed host reflection and packs',
+      '--baseline', 'docs/baselines/agent-system.mjs.md',
+      '--classification', 'logic,regression-risk',
+      '--owned-domains', 'logic,regression-risk',
+      '--regression-matrix', 'templates/regression-matrix.md',
+      '--old-new', 'bin/agent-system.mjs:bin/agent-system.mjs',
+      '--host', 'qwen',
+    ], workspace);
+
+    assert.equal(scaffold.status, 0, scaffold.stderr);
+
+    const gate = runChange(['gate', '--host', 'qwen'], workspace);
+    assert.equal(gate.status, 0, gate.stderr);
+    assert.match(gate.stdout, /Blocked \/ Ready: Ready/);
+
+    const reflectionPath = path.join(workspace, 'memory', 'change', 'qwen.md');
+    const packPath = path.join(workspace, 'memory', 'packs', 'qwen.md');
+    assert.equal(existsSync(reflectionPath), true);
+    assert.equal(existsSync(packPath), true);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
 test('change preview reports the current gate and missing proof', () => {
   const workspace = createWorkspace();
   try {
