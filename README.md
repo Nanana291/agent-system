@@ -58,9 +58,9 @@ Short form:
 qwen extensions install Nanana291/agent-system
 ```
 
-## V0.4.3 scope
+## V0.4.4 scope
 
-This release adds a universal change-orchestration layer on top of the presence bus. It turns an update or new-project intent into a task lock, scaffold, and delivery gate so changes are easier to plan, generate, and verify.
+This release adds automation and memory to the universal change workflow. It can scout repo changes from git status, auto-scaffold an intake, and capture a change memory note automatically when the gate closes.
 
 ## Memory layer
 
@@ -100,8 +100,11 @@ node ./bin/agent-system.mjs status clear
 node ./bin/agent-system.mjs status watch --interval 2
 node ./bin/agent-system.mjs status list --limit 10
 node ./bin/agent-system.mjs change analyze --type update --target bin/agent-system.mjs --intent "add universal change orchestration"
+node ./bin/agent-system.mjs change scout
+node ./bin/agent-system.mjs change auto-scaffold
 node ./bin/agent-system.mjs change scaffold --type new-project --name demo-change --target profiles/demo-change --intent "bootstrap a fresh agent workflow"
 node ./bin/agent-system.mjs change gate
+node ./bin/agent-system.mjs memory capture change
 node ./bin/agent-system.mjs export --profile imphub
 node ./bin/agent-system.mjs import --file ./agent-system-export.json
 ```

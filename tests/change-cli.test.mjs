@@ -54,6 +54,21 @@ function runChange(args, cwd) {
   });
 }
 
+function runGit(args, cwd) {
+  return spawnSync('git', args, {
+    cwd,
+    encoding: 'utf8',
+  });
+}
+
+function initGitRepo(workspace) {
+  assert.equal(runGit(['init', '-q'], workspace).status, 0);
+  assert.equal(runGit(['config', 'user.name', 'Agent System Tests'], workspace).status, 0);
+  assert.equal(runGit(['config', 'user.email', 'tests@example.com'], workspace).status, 0);
+  assert.equal(runGit(['add', '.'], workspace).status, 0);
+  assert.equal(runGit(['commit', '-q', '-m', 'baseline'], workspace).status, 0);
+}
+
 test('change analyze emits a task lock summary', () => {
   const workspace = createWorkspace();
   try {
@@ -69,6 +84,23 @@ test('change analyze emits a task lock summary', () => {
     assert.match(result.stdout, /Task type: update/);
     assert.match(result.stdout, /Target file: bin\/agent-system\.mjs/);
     assert.match(result.stdout, /Process skill: brainstorming/);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('change scout infers the modified target from git changes', () => {
+  const workspace = createWorkspace();
+  try {
+    initGitRepo(workspace);
+    writeFileSync(path.join(workspace, 'bin', 'agent-system.mjs'), `${readFileSync(path.join(workspace, 'bin', 'agent-system.mjs'), 'utf8')}\n// scout target\n`, 'utf8');
+
+    const result = runChange(['scout'], workspace);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /\[TASK LOCK\]/);
+    assert.match(result.stdout, /Task type: update/);
+    assert.match(result.stdout, /Target file: bin\/agent-system\.mjs/);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }
@@ -94,6 +126,25 @@ test('change scaffold creates the current intake and scaffold markdown', () => {
     assert.equal(intake.type, 'new-project');
     assert.equal(intake.name, 'demo-change');
     assert.equal(intake.target, 'profiles/demo-change');
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('change auto-scaffold creates the intake from inferred repo changes', () => {
+  const workspace = createWorkspace();
+  try {
+    initGitRepo(workspace);
+    writeFileSync(path.join(workspace, 'README.md'), `${readFileSync(path.join(workspace, 'README.md'), 'utf8')}\nAuto scaffold note.\n`, 'utf8');
+
+    const result = runChange(['auto-scaffold'], workspace);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Initialized change workspace/);
+    const intake = JSON.parse(readFileSync(path.join(workspace, 'change', 'current.json'), 'utf8'));
+    assert.equal(intake.type, 'update');
+    assert.ok(intake.target.includes('README.md'));
+    assert.equal(existsSync(path.join(workspace, 'change', 'intake.md')), true);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }
@@ -125,6 +176,35 @@ test('change gate blocks incomplete intake and passes complete intake', () => {
     assert.match(gate.stdout, /Blocked \/ Ready: Ready/);
     assert.match(gate.stdout, /Baseline updated: yes/);
     assert.match(gate.stdout, /Regression matrix: yes/);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('change gate captures memory automatically on success', () => {
+  const workspace = createWorkspace();
+  try {
+    const scaffold = runChange([
+      'scaffold',
+      '--type', 'update',
+      '--target', 'bin/agent-system.mjs',
+      '--intent', 'capture change memory automatically',
+      '--baseline', 'docs/baselines/agent-system.mjs.md',
+      '--classification', 'logic,regression-risk',
+      '--owned-domains', 'logic,regression-risk',
+      '--regression-matrix', 'templates/regression-matrix.md',
+      '--old-new', 'bin/agent-system.mjs:bin/agent-system.mjs',
+    ], workspace);
+
+    assert.equal(scaffold.status, 0, scaffold.stderr);
+
+    const gate = runChange(['gate'], workspace);
+    assert.equal(gate.status, 0, gate.stderr);
+    assert.match(gate.stdout, /Blocked \/ Ready: Ready/);
+
+    const memoryPath = path.join(workspace, 'memory', 'change', 'imphub.md');
+    assert.equal(existsSync(memoryPath), true);
+    assert.match(readFileSync(memoryPath, 'utf8'), /Gate passed for update change targeting bin\/agent-system\.mjs/);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }
