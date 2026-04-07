@@ -209,3 +209,126 @@ test('change gate captures memory automatically on success', () => {
     rmSync(workspace, { recursive: true, force: true });
   }
 });
+
+test('change preview reports the current gate and missing proof', () => {
+  const workspace = createWorkspace();
+  try {
+    const result = runChange([
+      'preview',
+      '--type', 'update',
+      '--target', 'bin/agent-system.mjs',
+      '--intent', 'preview upcoming change',
+      '--baseline', 'docs/baselines/agent-system.mjs.md',
+      '--classification', 'logic,regression-risk',
+      '--owned-domains', 'logic,regression-risk',
+      '--regression-matrix', 'templates/regression-matrix.md',
+      '--old-new', 'bin/agent-system.mjs:bin/agent-system.mjs',
+    ], workspace);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /\[CHANGE PREVIEW\]/);
+    assert.match(result.stdout, /Gate status: Ready/);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('change apply writes the current intake and scaffold markdown', () => {
+  const workspace = createWorkspace();
+  try {
+    const result = runChange([
+      'apply',
+      '--type', 'update',
+      '--target', 'bin/agent-system.mjs',
+      '--intent', 'apply upcoming change',
+      '--baseline', 'docs/baselines/agent-system.mjs.md',
+      '--classification', 'logic,regression-risk',
+      '--owned-domains', 'logic,regression-risk',
+      '--regression-matrix', 'templates/regression-matrix.md',
+      '--old-new', 'bin/agent-system.mjs:bin/agent-system.mjs',
+    ], workspace);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Applied change workspace/);
+    assert.equal(existsSync(path.join(workspace, 'change', 'current.json')), true);
+    assert.equal(existsSync(path.join(workspace, 'change', 'intake.md')), true);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('change diff compares the current intake with the last gate', () => {
+  const workspace = createWorkspace();
+  try {
+    const scaffold = runChange([
+      'scaffold',
+      '--type', 'update',
+      '--target', 'bin/agent-system.mjs',
+      '--intent', 'prepare diff report',
+      '--baseline', 'docs/baselines/agent-system.mjs.md',
+      '--classification', 'logic,regression-risk',
+      '--owned-domains', 'logic,regression-risk',
+      '--regression-matrix', 'templates/regression-matrix.md',
+      '--old-new', 'bin/agent-system.mjs:bin/agent-system.mjs',
+    ], workspace);
+    assert.equal(scaffold.status, 0, scaffold.stderr);
+
+    const result = runChange(['diff'], workspace);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /\[CHANGE DIFF\]/);
+    assert.match(result.stdout, /Current type: update/);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('change rollback restores the last committed intake snapshot', () => {
+  const workspace = createWorkspace();
+  try {
+    initGitRepo(workspace);
+    const scaffold = runChange([
+      'scaffold',
+      '--type', 'update',
+      '--target', 'bin/agent-system.mjs',
+      '--intent', 'prepare rollback',
+      '--baseline', 'docs/baselines/agent-system.mjs.md',
+      '--classification', 'logic,regression-risk',
+      '--owned-domains', 'logic,regression-risk',
+      '--regression-matrix', 'templates/regression-matrix.md',
+      '--old-new', 'bin/agent-system.mjs:bin/agent-system.mjs',
+    ], workspace);
+    assert.equal(scaffold.status, 0, scaffold.stderr);
+
+    writeFileSync(path.join(workspace, 'change', 'current.json'), JSON.stringify({ type: 'rewrite', target: 'oops' }, null, 2) + '\n', 'utf8');
+
+    const result = runChange(['rollback'], workspace);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Rollback restored/);
+    const intake = JSON.parse(readFileSync(path.join(workspace, 'change', 'current.json'), 'utf8'));
+    assert.equal(intake.type, 'update');
+    assert.equal(intake.target, 'bin/agent-system.mjs');
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('memory suggest promotes durable change lessons', () => {
+  const workspace = createWorkspace();
+  try {
+    writeFileSync(
+      path.join(workspace, 'memory', 'change', 'imphub.md'),
+      '# Imp Hub X Change Memory\n\n- Keep preview output aligned with gate output.\n- Keep preview output aligned with gate output.\n- Gate passed for update change targeting bin/agent-system.mjs.\n',
+      'utf8',
+    );
+
+    const result = runChange(['memory-suggest'], workspace);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /\[MEMORY SUGGEST\]/);
+    assert.match(result.stdout, /Suggested promotions:/);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});

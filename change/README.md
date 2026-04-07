@@ -15,8 +15,13 @@ This directory stores the current change intake and its event history.
 - `change auto-scaffold` infers the change and writes the current intake plus scaffold.
 - `change analyze` captures the current task lock.
 - `change scaffold` writes the intake markdown scaffold.
+- `change preview` shows the intake plus gate status without writing.
+- `change apply` writes the intake and scaffold files in one step.
+- `change diff` compares the current intake against the last gate.
+- `change rollback` restores the last committed change intake snapshot.
 - `change gate` checks whether the change is ready to ship.
 - `change gate` also captures a note into `memory/change/<profile>.md`.
+- `change memory-suggest` proposes durable lessons to promote from change memory.
 
 ## Expected flow
 

@@ -67,9 +67,9 @@ Short form:
 qwen extensions install Nanana291/agent-system
 ```
 
-## V0.4.4 scope
+## V0.4.5 scope
 
-This release adds automation and memory to the universal change workflow. It can scout repo changes from git status, auto-scaffold an intake, and capture a change memory note automatically when the gate closes.
+This release adds change previewing, apply/rollback, diffing, and memory suggestions to the universal change workflow. It can scout repo changes from git status, auto-scaffold an intake, preview gate readiness, apply or roll back a change snapshot, and suggest memory promotions automatically.
 
 ## Memory layer
 
@@ -112,8 +112,13 @@ node ./bin/agent-system.mjs change analyze --type update --target bin/agent-syst
 node ./bin/agent-system.mjs change scout
 node ./bin/agent-system.mjs change auto-scaffold
 node ./bin/agent-system.mjs change scaffold --type new-project --name demo-change --target profiles/demo-change --intent "bootstrap a fresh agent workflow"
+node ./bin/agent-system.mjs change preview --type update --target bin/agent-system.mjs --intent "preview upcoming change"
+node ./bin/agent-system.mjs change apply --type update --target bin/agent-system.mjs --intent "apply upcoming change"
+node ./bin/agent-system.mjs change diff
+node ./bin/agent-system.mjs change rollback
 node ./bin/agent-system.mjs change gate
 node ./bin/agent-system.mjs memory capture change
+node ./bin/agent-system.mjs change memory-suggest
 node ./bin/agent-system.mjs export --profile imphub
 node ./bin/agent-system.mjs import --file ./agent-system-export.json
 ```

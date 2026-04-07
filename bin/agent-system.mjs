@@ -231,11 +231,15 @@ function printHelp() {
     '  sync       Validate or regenerate profiles/<profile>/AGENTS.md',
     '  lint       Run the full repository consistency check',
     '  init       Create a new profile from the active profile template',
-    '  change     Analyze, scaffold, and gate a change workflow',
+    '  change     Analyze, scaffold, preview, apply, and gate a change workflow',
     '    scout    Detect likely change targets from git status',
     '    auto-scaffold  Scaffold the current change from inferred changes',
     '    analyze  Produce a structured task lock for a change intent',
     '    scaffold Create the intake and scaffold files for a change',
+    '    preview  Show the intake and gate status without writing',
+    '    apply    Write the intake and scaffold files for a change',
+    '    diff     Compare the current intake against the last gate',
+    '    rollback Restore the last committed change intake snapshot',
     '    gate     Validate the current change intake and delivery gate',
     '  memory    Read or update layered memory files',
     '    search   Search memory files for matching text',
@@ -244,6 +248,7 @@ function printHelp() {
     '    audit    Check memory drift and scope conflicts',
     '    stats    Show memory file counts and entry counts',
     '    capture  Capture a change memory note automatically',
+    '    suggest  Propose memory promotions from change lessons',
     '  status     Read or update live agent presence',
     '    show     Print the current presence snapshot',
     '    who      Print the active session summary',
@@ -678,6 +683,34 @@ async function handleChange(workspace, flags, positional) {
       console.log(renderChangeTaskLock(scaffoldedIntake));
       return;
     }
+    case 'preview': {
+      const intake = buildChangeIntake(workspace, flags, readChangeCurrent(workspace), true);
+      const report = evaluateChangeGate(intake);
+      console.log(renderChangePreview(intake, report));
+      process.exit(report.ready ? 0 : 1);
+      return;
+    }
+    case 'apply': {
+      const intake = buildChangeIntake(workspace, flags, readChangeCurrent(workspace), true);
+      const appliedIntake = {
+        ...intake,
+        scaffoldedAt: intake.scaffoldedAt || new Date().toISOString(),
+      };
+      scaffoldChangeWorkspace(workspace, appliedIntake);
+      writeChangeRecord(workspace, appliedIntake, 'apply');
+      console.log(`Applied change workspace: ${path.relative(workspace.repoRoot, workspace.changeDir)}`);
+      console.log(renderChangeTaskLock(appliedIntake));
+      return;
+    }
+    case 'diff': {
+      console.log(renderChangeDiff(workspace));
+      return;
+    }
+    case 'rollback': {
+      const restoredPath = rollbackChange(workspace);
+      console.log(`Rollback restored ${path.relative(workspace.repoRoot, restoredPath)}`);
+      return;
+    }
     case 'gate': {
       const intake = readChangeCurrent(workspace);
       const report = evaluateChangeGate(intake);
@@ -690,6 +723,10 @@ async function handleChange(workspace, flags, positional) {
       }, 'gate');
       console.log(renderChangeGate(report));
       process.exit(report.ready ? 0 : 1);
+      return;
+    }
+    case 'memory-suggest': {
+      handleMemorySuggest(workspace);
       return;
     }
     default:
@@ -1444,6 +1481,90 @@ function renderChangeGate(report) {
   lines.push(`Open risks: ${formatList(report.openRisks)}`);
   lines.push(`Blocked / Ready: ${report.ready ? 'Ready' : 'Blocked'}`);
   return lines.join('\n');
+}
+
+function renderChangePreview(intake, report) {
+  const lines = [];
+  lines.push('[CHANGE PREVIEW]');
+  lines.push(`Change type: ${intake.type || 'unknown'}`);
+  lines.push(`Target file: ${intake.target || 'n/a'}`);
+  lines.push(`Gate status: ${report.ready ? 'Ready' : 'Blocked'}`);
+  lines.push(`Missing proof: ${formatList([
+    report.intakeCaptured ? '' : 'intent/target',
+    report.baselineUpdated ? '' : 'baseline',
+    report.regressionMatrix ? '' : 'regression matrix',
+    report.oldNewMapping ? '' : 'old->new mapping',
+    report.ownedDomainsClosed ? '' : 'owned domains',
+  ].filter(Boolean))}`);
+  lines.push(`Open risks: ${formatList(report.openRisks)}`);
+  return lines.join('\n');
+}
+
+function renderChangeDiff(workspace) {
+  const current = readChangeCurrent(workspace);
+  const history = readChangeHistory(workspace);
+  const lastGate = [...history].reverse().find((entry) => entry.eventType === 'gate') || history[history.length - 1] || null;
+  const lines = [];
+  lines.push('[CHANGE DIFF]');
+  lines.push(`Current type: ${current.type || 'unknown'}`);
+  lines.push(`Current target: ${current.target || 'n/a'}`);
+  lines.push(`Last gate type: ${lastGate?.type || 'unknown'}`);
+  lines.push(`Last gate state: ${lastGate?.state || 'unknown'}`);
+  lines.push(`Changed since gate: ${current.updatedAt && lastGate?.updatedAt && current.updatedAt !== lastGate.updatedAt ? 'yes' : 'no'}`);
+  return lines.join('\n');
+}
+
+function rollbackChange(workspace) {
+  const history = readChangeHistory(workspace);
+  if (history.length === 0) {
+    const fallback = createEmptyChangeIntake(workspace);
+    writeChangeRecord(workspace, fallback, 'rollback');
+    fs.writeFileSync(workspace.changeCurrentPath, JSON.stringify(fallback, null, 2) + '\n', 'utf8');
+    return workspace.changeCurrentPath;
+  }
+  const snapshot = [...history].reverse().find((entry) => entry.eventType !== 'rollback') || history[history.length - 1];
+  const restored = {
+    ...createEmptyChangeIntake(workspace),
+    ...snapshot,
+    updatedAt: new Date().toISOString(),
+    state: snapshot.state || 'draft',
+  };
+  fs.writeFileSync(workspace.changeCurrentPath, JSON.stringify(restored, null, 2) + '\n', 'utf8');
+  writeChangeRecord(workspace, restored, 'rollback');
+  return workspace.changeCurrentPath;
+}
+
+function handleMemorySuggest(workspace) {
+  const filePath = workspace.changeMemoryPath;
+  const text = readOptionalText(filePath);
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter((line) => line.startsWith('- '));
+  const counts = new Map();
+  const suggestions = [];
+  for (const line of lines) {
+    const normalized = line.slice(2).trim().toLowerCase();
+    counts.set(normalized, (counts.get(normalized) || 0) + 1);
+  }
+  for (const [line, count] of counts.entries()) {
+    if (count > 1) {
+      suggestions.push(`Promote duplicate lesson to profile memory: ${line}`);
+    }
+  }
+  for (const line of lines) {
+    const body = line.slice(2).trim();
+    if (/gate passed/i.test(body)) {
+      suggestions.push(`Promote durable gate lesson to profile memory: ${body}`);
+    }
+  }
+  console.log('[MEMORY SUGGEST]');
+  console.log(`Source: ${path.relative(workspace.repoRoot, filePath)}`);
+  if (suggestions.length === 0) {
+    console.log('Suggested promotions: none');
+    return;
+  }
+  console.log('Suggested promotions:');
+  for (const suggestion of suggestions) {
+    console.log(`- ${suggestion}`);
+  }
 }
 
 function renderChangeIntakeDoc(intake, workspace) {
