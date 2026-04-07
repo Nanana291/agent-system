@@ -1,6 +1,6 @@
 {
   "name": "agent-system",
-  "version": "0.4.5.5",
+  "version": "0.4.6",
   "schemaVersion": 1,
   "purpose": "Universal route, ownership, handoff, and delivery-gate scaffold that complements Superpowers.",
   "superpowersIntegration": {

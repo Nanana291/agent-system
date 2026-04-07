@@ -1,6 +1,6 @@
 {
   "name": "agent-system",
-  "version": "0.4.5.5",
+  "version": "0.4.6",
   "private": true,
   "type": "module",
   "description": "Agent-system CLI for validation, routing, sync, memory, and profile maintenance.",
@@ -22,7 +22,7 @@
     "memory-prune": "node ./bin/agent-system.mjs memory prune",
     "memory-audit": "node ./bin/agent-system.mjs memory audit",
     "memory-stats": "node ./bin/agent-system.mjs memory stats",
-    "memory-learn": "node ./bin/agent-system.mjs memory learn --apply",
+    "memory-learn": "node ./bin/agent-system.mjs memory learn --host qwen --apply",
     "status": "node ./bin/agent-system.mjs status",
     "status-heartbeat": "node ./bin/agent-system.mjs status heartbeat",
     "status-who": "node ./bin/agent-system.mjs status who",

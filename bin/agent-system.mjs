@@ -20,7 +20,7 @@ async function main() {
     return;
   }
 
-  const workspace = loadWorkspace(flags.profile);
+  const workspace = loadWorkspace(flags.profile, flags.host);
 
   switch (command) {
     case 'validate':
@@ -107,6 +107,11 @@ function parseArgs(argv) {
     }
     if (arg === '--profile') {
       flags.profile = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--host') {
+      flags.host = argv[i + 1];
       i += 1;
       continue;
     }
@@ -280,6 +285,7 @@ function printHelp() {
     '',
     'Flags:',
     '  --profile <name>  Override the active profile',
+    '  --host <name>     Override the active host (claude|codex|qwen)',
     '  --agent <id>      Set the status agent id',
     '  --name <text>     Set the human-facing agent name',
     '  --action <text>   Set the current action text',
@@ -309,11 +315,12 @@ function printHelp() {
   ].join('\n'));
 }
 
-function loadWorkspace(profileName) {
+function loadWorkspace(profileName, hostName) {
   const repoRoot = findRepoRoot(process.cwd()) || findRepoRoot(scriptDir);
   const manifestPath = path.join(repoRoot, 'agent-system.json');
   const manifest = readJson(manifestPath);
   const activeProfileName = profileName || manifest.profileDiscovery?.defaultProfile;
+  const activeHostName = normalizeHostName(hostName || process.env.AGENT_SYSTEM_HOST || 'qwen');
   const profileDir = path.join(repoRoot, 'profiles', activeProfileName);
   const profilePath = path.join(profileDir, 'profile.json');
   const profileDocPath = path.join(profileDir, 'AGENTS.md');
@@ -326,12 +333,8 @@ function loadWorkspace(profileName) {
   const changeReadmePath = path.join(repoRoot, manifest.change?.readme || 'change/README.md');
   const changeSchemaPath = path.join(repoRoot, manifest.change?.schema || 'docs/change-schema.md');
   const changeTemplatePath = path.join(repoRoot, manifest.change?.intakeTemplate || 'templates/change-intake.md');
-  const changeMemoryPath = resolveTemplatePath(
-    repoRoot,
-    manifest.memory?.change,
-    activeProfileName,
-    `memory/change/${activeProfileName}.md`,
-  );
+  const changeMemoryPath = resolveHostMemoryPath(repoRoot, activeHostName, 'change');
+  const hostMemoryPath = resolveHostMemoryPath(repoRoot, activeHostName, 'host');
   const profile = fs.existsSync(profilePath) ? readJson(profilePath) : null;
 
   return {
@@ -352,8 +355,38 @@ function loadWorkspace(profileName) {
     changeSchemaPath,
     changeTemplatePath,
     changeMemoryPath,
+    hostMemoryPath,
+    activeHostName,
     profile,
   };
+}
+
+function normalizeHostName(value) {
+  const text = String(value || '').trim().toLowerCase();
+  if (text.includes('qwen')) return 'qwen';
+  if (text.includes('claude')) return 'claude';
+  if (text.includes('codex')) return 'codex';
+  return 'qwen';
+}
+
+function resolveHostMemoryPath(repoRoot, hostName, scope) {
+  const normalizedHost = normalizeHostName(hostName);
+  if (scope === 'host') {
+    return path.join(repoRoot, 'memory', 'host', `${normalizedHost}.md`);
+  }
+  if (scope === 'change') {
+    return path.join(repoRoot, 'memory', 'change', `${normalizedHost}.md`);
+  }
+  return path.join(repoRoot, 'memory', 'host', `${normalizedHost}.md`);
+}
+
+function hasAnyChangeMemoryFile(repoRoot) {
+  const dir = path.join(repoRoot, 'memory', 'change');
+  if (!fs.existsSync(dir)) {
+    return false;
+  }
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  return entries.some((entry) => entry.isFile() && entry.name.endsWith('.md') && entry.name.toLowerCase() !== 'readme.md');
 }
 
 function resolveTemplatePath(repoRoot, template, profileName, fallback = '') {
@@ -417,7 +450,7 @@ function handleValidate(workspace) {
   if (!fs.existsSync(changeTemplatePath)) {
     issues.push(`missing change template: ${path.relative(repoRoot, changeTemplatePath)}`);
   }
-  if (!fs.existsSync(changeMemoryPath)) {
+  if (!fs.existsSync(changeMemoryPath) && !hasAnyChangeMemoryFile(repoRoot)) {
     issues.push(`missing change memory: ${path.relative(repoRoot, changeMemoryPath)}`);
   }
 
@@ -666,14 +699,16 @@ function handleMemoryStats(workspace) {
   const stats = memoryStats(workspace.repoRoot);
   console.log(`Files: ${stats.files}`);
   console.log(`Entries: ${stats.entries}`);
-  console.log(`Scopes: system=${stats.system}, profile=${stats.profile}, host=${stats.host}, change=${stats.change}`);
+  console.log(`Scopes: host=${stats.host}, change=${stats.change}`);
 }
 
 function handleMemoryLearn(workspace, flags) {
   const threshold = parseCount(flags.threshold, 2);
   const apply = flags.dryRun ? false : flags.apply !== false;
-  const report = learnMemory(workspace.repoRoot, workspace.manifest, workspace.activeProfileName, threshold, apply);
+  const hostName = normalizeHostName(flags.host || workspace.activeHostName);
+  const report = learnMemory(workspace.repoRoot, hostName, threshold, apply);
   console.log('[MEMORY LEARN]');
+  console.log(`Host: ${hostName}`);
   console.log(`Threshold: ${report.threshold}`);
   console.log(`Apply: ${report.applied ? 'yes' : 'no'}`);
   console.log(`Promoted: ${report.promoted}`);
@@ -699,7 +734,7 @@ function handleMemoryCapture(workspace, positional) {
   }
   const intake = readChangeCurrent(workspace);
   const report = evaluateChangeGate(intake);
-  captureChangeMemory(workspace, intake, report);
+  captureChangeMemory(workspace, intake, report, workspace.activeHostName);
   console.log(`Captured change memory for ${intake.target || 'unknown target'}`);
 }
 
@@ -761,9 +796,9 @@ async function handleChange(workspace, flags, positional) {
     case 'gate': {
       const intake = readChangeCurrent(workspace);
       const report = evaluateChangeGate(intake);
-      captureChangeMemory(workspace, intake, report);
+      captureChangeMemory(workspace, intake, report, workspace.activeHostName);
       if (report.ready) {
-        learnMemory(workspace.repoRoot, workspace.manifest, workspace.activeProfileName, 2, true);
+        learnMemory(workspace.repoRoot, workspace.activeHostName, 2, true);
       }
       writeChangeRecord(workspace, {
         ...intake,
@@ -952,7 +987,7 @@ function buildLintReport(workspace) {
     ['change history exists', () => fs.existsSync(workspace.changeHistoryPath)],
     ['change readme exists', () => fs.existsSync(workspace.changeReadmePath)],
     ['change template exists', () => fs.existsSync(workspace.changeTemplatePath)],
-    ['change memory exists', () => fs.existsSync(workspace.changeMemoryPath)],
+    ['change memory exists', () => fs.existsSync(workspace.changeMemoryPath) || hasAnyChangeMemoryFile(workspace.repoRoot)],
     ['command script exists', () => fs.existsSync(path.join(workspace.repoRoot, 'bin', 'agent-system.mjs'))],
     ['memory audit clean', () => auditMemory(workspace.repoRoot, workspace.manifest, workspace.profile).ok],
   ];
@@ -1169,11 +1204,11 @@ function ensureMemoryProfileFile(repoRoot, profileName) {
   }
 }
 
-function ensureMemoryChangeFile(repoRoot, profileName) {
-  const filePath = path.join(repoRoot, 'memory', 'change', `${profileName}.md`);
+function ensureMemoryChangeFile(repoRoot, hostName) {
+  const filePath = resolveHostMemoryPath(repoRoot, hostName, 'change');
   if (!fs.existsSync(filePath)) {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, `# ${humanize(profileName)} Change Memory\n\nChange-specific lessons captured from gates and scouts live here.\n`, 'utf8');
+    fs.writeFileSync(filePath, `# ${humanize(hostName)} Change Memory\n\nChange-specific lessons captured from gates and scouts live here.\n`, 'utf8');
   }
 }
 
@@ -1483,14 +1518,10 @@ function evaluateChangeGate(intake) {
   };
 }
 
-function captureChangeMemory(workspace, intake, report) {
-  ensureMemoryChangeFile(workspace.repoRoot, workspace.activeProfileName);
-  const filePath = workspace.changeMemoryPath || resolveTemplatePath(
-    workspace.repoRoot,
-    workspace.manifest.memory?.change,
-    workspace.activeProfileName,
-    `memory/change/${workspace.activeProfileName}.md`,
-  );
+function captureChangeMemory(workspace, intake, report, hostName) {
+  const normalizedHost = normalizeHostName(hostName || workspace.activeHostName);
+  ensureMemoryChangeFile(workspace.repoRoot, normalizedHost);
+  const filePath = resolveHostMemoryPath(workspace.repoRoot, normalizedHost, 'change');
   const target = intake?.target || 'unknown target';
   const type = intake?.type || 'unknown';
   const classification = formatList(intake?.classification);
@@ -1617,13 +1648,12 @@ function handleMemorySuggest(workspace) {
   }
 }
 
-function learnMemory(repoRoot, manifest, profileName, threshold, apply) {
-  const changePath = resolveTemplatePath(repoRoot, manifest.memory?.change, profileName, `memory/change/${profileName}.md`);
-  const profilePath = resolveTemplatePath(repoRoot, manifest.memory?.profile, profileName, `memory/profile/${profileName}.md`);
-  const systemPath = path.join(repoRoot, manifest.memory?.system || 'memory/system.md');
+function learnMemory(repoRoot, hostName, threshold, apply) {
+  const normalizedHost = normalizeHostName(hostName);
+  const changePath = resolveHostMemoryPath(repoRoot, normalizedHost, 'change');
+  const hostPath = resolveHostMemoryPath(repoRoot, normalizedHost, 'host');
   const changeEntries = readMemoryBullets(changePath);
-  const profileEntries = readMemoryBullets(profilePath);
-  const systemEntries = readMemoryBullets(systemPath);
+  const hostEntries = readMemoryBullets(hostPath);
   const counts = new Map();
   const order = [];
 
@@ -1638,8 +1668,7 @@ function learnMemory(repoRoot, manifest, profileName, threshold, apply) {
 
   const promotions = [];
   const duplicateLines = [];
-  const profileSet = new Set(profileEntries.map((entry) => normalizeMemoryBullet(entry)));
-  const systemSet = new Set(systemEntries.map((entry) => normalizeMemoryBullet(entry)));
+  const hostSet = new Set(hostEntries.map((entry) => normalizeMemoryBullet(entry)));
 
   for (const key of order) {
     const entry = counts.get(key);
@@ -1648,19 +1677,11 @@ function learnMemory(repoRoot, manifest, profileName, threshold, apply) {
     }
     duplicateLines.push(entry.text);
 
-    if (!profileSet.has(key)) {
-      promotions.push({ target: 'profile', text: entry.text });
+    if (!hostSet.has(key)) {
+      promotions.push({ target: normalizedHost, text: entry.text });
       if (apply) {
-        appendMemoryEntry(profilePath, stripBulletPrefix(entry.text));
-        profileSet.add(key);
-      }
-    }
-
-    if (entry.count >= threshold + 1 && !systemSet.has(key) && isUniversalMemoryRule(entry.text)) {
-      promotions.push({ target: 'system', text: entry.text });
-      if (apply) {
-        appendMemoryEntry(systemPath, stripBulletPrefix(entry.text));
-        systemSet.add(key);
+        appendMemoryEntry(hostPath, stripBulletPrefix(entry.text));
+        hostSet.add(key);
       }
     }
   }
