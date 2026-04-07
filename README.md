@@ -67,9 +67,9 @@ Short form:
 qwen extensions install Nanana291/agent-system
 ```
 
-## V0.5.1 scope
+## V0.5.2 scope
 
-This release adds a quick-update entry point for Qwen and the other hosts. The repository can now prepare a ready-to-review update intake from just a target and intent, without relying on `git diff`, while still reusing the existing change, status, and memory state.
+This release adds a multi-agent upgrade entry point that syncs instruction upgrades and memory across the agent layer. The repository can now apply upgrades directly to several agents at once, then mirror the durable lessons into the profile memory and each host memory file so Claude, Codex, and Qwen stay aligned.
 
 ## Memory layer
 
@@ -127,6 +127,7 @@ node ./bin/agent-system.mjs change gate
 node ./bin/agent-system.mjs memory capture change
 node ./bin/agent-system.mjs change memory-suggest
 node ./bin/agent-system.mjs quick-update bin/agent-system.mjs "prepare a fast update path for qwen"
+node ./bin/agent-system.mjs upgrade
 node ./bin/agent-system.mjs backup ./agent-system-backup.json
 node ./bin/agent-system.mjs restore --file ./agent-system-backup.json
 node ./bin/agent-system.mjs bundle validate --file ./agent-system-backup.json

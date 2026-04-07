@@ -51,9 +51,10 @@ Durable rules should be written where they belong first, then kept inside the ho
 - `change analyze`, `change scout`, `change auto-scaffold`, `change scaffold`, `change preview`, `change apply`, `change diff`, `change rollback`, and `change gate` are the change workflow entry points.
 - `change memory-suggest` proposes durable lessons to promote from change memory.
 - `quick-update` prepares a ready-to-review update intake from target and intent without requiring `git diff`.
+- `upgrade` applies multi-agent instruction upgrades and syncs the resulting memory into the active profile and all supported host memories.
 - `memory/change/<host>.md` stores auto-captured lessons from change gates before promotion into that same host's memory file.
 - `memory learn` auto-promotes repeated change lessons into the active host's memory file during a successful gate.
 
-## V0.5 intent
+## V0.5.2 intent
 
-This release adds portable recovery and quick update entry points on top of the routing and memory scaffold: the repo can snapshot the mutable workspace, validate the bundle, prune duplicate noise, restore the state back into a clean checkout, and prepare a fast update intake from just target plus intent.
+This release adds portable recovery, quick update entry points, and multi-agent upgrade syncing on top of the routing and memory scaffold: the repo can snapshot the mutable workspace, validate the bundle, prune duplicate noise, restore the state back into a clean checkout, prepare a fast update intake from just target plus intent, and apply direct instruction upgrades across several agents while keeping host memory aligned.

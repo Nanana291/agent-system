@@ -38,6 +38,9 @@ async function main() {
     case 'quick-update':
       handleQuickUpdate(workspace, flags, positional);
       return;
+    case 'upgrade':
+      handleUpgrade(workspace, flags, positional);
+      return;
     case 'route':
       printRouteSummary(workspace.profile, await readTaskText(positional));
       return;
@@ -275,6 +278,7 @@ function printHelp() {
     '    rollback Restore the last committed change intake snapshot',
     '    gate     Validate the current change intake and delivery gate',
     '  quick-update Prepare a fast update intake from target + intent',
+    '  upgrade    Apply multi-agent instruction and memory upgrades',
     '  memory    Read or update layered memory files',
     '    search   Search memory files for matching text',
     '    promote  Promote a memory rule between scopes',
@@ -1130,6 +1134,239 @@ function handleQuickUpdate(workspace, flags, positional) {
   console.log(renderChangeTaskLock(scaffoldedIntake));
   console.log(renderChangePreview(scaffoldedIntake, report));
   console.log(`Gate status: ${report.ready ? 'Ready' : 'Blocked'}`);
+}
+
+function handleUpgrade(workspace, flags, positional) {
+  const targetPath = flags.files?.[0] || positional[0] || path.join(workspace.repoRoot, 'AGENTS.md');
+  const absoluteTargetPath = path.isAbsolute(targetPath) ? targetPath : path.resolve(workspace.repoRoot, targetPath);
+  if (!fs.existsSync(absoluteTargetPath)) {
+    console.error(`Upgrade target not found: ${targetPath}`);
+    process.exit(1);
+  }
+
+  const sourceText = fs.readFileSync(absoluteTargetPath, 'utf8');
+  const report = buildUpgradeReport(workspace, sourceText, absoluteTargetPath, normalizeHostName(flags.host || workspace.activeHostName));
+  const upgradedText = renderUpgradeSyncDoc(sourceText, report);
+  fs.writeFileSync(absoluteTargetPath, upgradedText, 'utf8');
+
+  const profileDocPath = workspace.profileDocPath;
+  if (profileDocPath && path.resolve(profileDocPath) !== absoluteTargetPath && fs.existsSync(profileDocPath)) {
+    fs.writeFileSync(profileDocPath, renderUpgradeSyncDoc(fs.readFileSync(profileDocPath, 'utf8'), report), 'utf8');
+  }
+
+  syncUpgradeMemory(workspace, report);
+
+  console.log('[UPGRADE]');
+  console.log(`Target: ${path.relative(workspace.repoRoot, absoluteTargetPath)}`);
+  console.log(`Agents upgraded: ${report.agents.length}`);
+  console.log(`Hosts synced: ${report.hosts.join(', ')}`);
+}
+
+function buildUpgradeReport(workspace, sourceText, targetPath, activeHost) {
+  const parsedSections = parseUpgradeAgentSections(sourceText);
+  const sourceSections = parsedSections.length > 0 ? parsedSections : inferProfileUpgradeAgents(workspace.profile);
+  const agents = sourceSections.map((section) => buildUpgradeAgent(section, workspace, activeHost));
+  const hosts = Array.from(new Set(workspace.profile?.supportedHosts || ['claude', 'codex', 'qwen']));
+  return {
+    targetPath,
+    profile: workspace.activeProfileName,
+    activeHost,
+    generatedAt: new Date().toISOString(),
+    sections: sourceSections,
+    agents,
+    hosts,
+  };
+}
+
+function parseUpgradeAgentSections(sourceText) {
+  const lines = String(sourceText || '').split(/\r?\n/);
+  const sections = [];
+  let current = null;
+  for (const line of lines) {
+    if (/^##\s+/.test(line)) {
+      if (current) sections.push(current);
+      current = { heading: line.trim(), body: [line] };
+      continue;
+    }
+    if (current) current.body.push(line);
+  }
+  if (current) sections.push(current);
+  return sections.filter((section) => /agent/i.test(section.heading));
+}
+
+function inferProfileUpgradeAgents(profile) {
+  const entries = [];
+  for (const ownedDomain of profile?.ownedDomains || []) {
+    if (ownedDomain?.owner) {
+      entries.push({
+        heading: `${humanize(ownedDomain.owner)} (${ownedDomain.domain})`,
+        body: [ownedDomain.notes || ''],
+      });
+    }
+  }
+  return entries;
+}
+
+function buildUpgradeAgent(section, workspace, syncHost) {
+  const title = normalizeUpgradeHeading(section.heading);
+  return {
+    heading: section.heading,
+    title,
+    notes: upgradeNotesForTitle(title, section.body.join('\n'), workspace, syncHost),
+  };
+}
+
+function normalizeUpgradeHeading(heading) {
+  return String(heading || '')
+    .replace(/^##\s+/, '')
+    .replace(/^Agent\s+\d+\s+—\s+/i, '')
+    .replace(/^The\s+/i, '')
+    .trim();
+}
+
+function upgradeNotesForTitle(title, body, workspace, syncHost) {
+  const lowered = `${title} ${body}`.toLowerCase();
+  const hostName = normalizeHostName(syncHost || workspace.activeHostName);
+  const base = [];
+
+  if (lowered.includes('scriptmaster') || lowered.includes('logic')) {
+    base.push('Keep selector, dispatcher, and recovery ownership explicit.');
+    base.push('Preserve baseline and regression proof for existing-script updates.');
+    base.push('Call out post-autoload runtime re-sync when derived state changes.');
+  } else if (lowered.includes('ui designer') || lowered.includes('ui')) {
+    base.push('Keep visible wording, ToolTip coverage, and gated visibility aligned.');
+    base.push('Use status labels that match the user-facing intent first.');
+    base.push('Document old -> new flag mappings when UI labels move.');
+  } else if (lowered.includes('feature framer') || lowered.includes('framing')) {
+    base.push('Make child controls read like subordinate actions, modes, or fallbacks.');
+    base.push('Do not force separate product names for dependent controls.');
+    base.push('Preserve the parent-child mental model in the visible wording.');
+  } else if (lowered.includes('terminology keeper') || lowered.includes('terminology')) {
+    base.push('Keep visible names stable across pages for the same concept.');
+    base.push('Reject GPT-like labels that sound generic or inflated.');
+    base.push('Only introduce synonyms when they improve comprehension.');
+  } else if (lowered.includes('optimizer') || lowered.includes('performance')) {
+    base.push('Keep register pressure, memory churn, and connection cleanup in view.');
+    base.push('Avoid decorative helper layers that do not reduce risk or cost.');
+    base.push('State ownership must remain explicit for long-lived loops.');
+  } else if (lowered.includes('qa inspector') || lowered.includes('regression')) {
+    base.push('Anchor delivery on a baseline and a clear regression matrix.');
+    base.push('Call out touched vs untouched paths before delivery closes.');
+    base.push('Block on missing proof instead of soft-approving the change.');
+  } else if (lowered.includes('executor specialist') || lowered.includes('compat')) {
+    base.push('Fail closed on unsupported executor paths.');
+    base.push('Keep compatibility gates and unsupported-path notes explicit.');
+    base.push('Do not assume host-native features exist without proof.');
+  } else if (lowered.includes('lifecycle manager') || lowered.includes('lifecycle')) {
+    base.push('Preserve rebinds, respawn paths, and loop ownership boundaries.');
+    base.push('Never leave long-lived state without an owner contract.');
+    base.push('Keep recovery and attachment paths explicit.');
+  } else if (lowered.includes('update steward') || lowered.includes('update')) {
+    base.push('Preserve the allowed update scope and preserve-list features.');
+    base.push('Keep additive changes inside the existing owner path first.');
+    base.push('State the old -> new runtime map when ownership moves.');
+  } else if (lowered.includes('ghost') || lowered.includes('sentinel')) {
+    base.push('Keep timing profiles concrete and suspicion response explicit.');
+    base.push('Do not stack redundant background controllers.');
+    base.push('Stop the line on remote timing or crash risk.');
+  } else {
+    base.push('Keep ownership explicit.');
+    base.push('Capture the durable lesson in the right host memory.');
+    base.push('Prefer additive, reversible upgrades over broad rewrites.');
+  }
+
+  base.push(`Host sync target: ${hostName}.`);
+  return base;
+}
+
+function renderUpgradeSyncDoc(sourceText, report) {
+  const start = '<!-- agent-system-upgrade-start -->';
+  const end = '<!-- agent-system-upgrade-end -->';
+  const lines = [];
+  lines.push(start);
+  lines.push('## Upgrade Sync');
+  lines.push('');
+  lines.push(`Generated: ${report.generatedAt}`);
+  lines.push(`Profile: ${report.profile}`);
+  lines.push(`Host focus: ${report.activeHost}`);
+  lines.push(`Agents upgraded: ${report.agents.length}`);
+  lines.push('');
+  for (const agent of report.agents) {
+    lines.push(`### ${agent.title}`);
+    for (const note of agent.notes) {
+      lines.push(`- ${note}`);
+    }
+    lines.push('');
+  }
+  lines.push('### Host Sync');
+  for (const host of report.hosts) {
+    lines.push(`- ${host}: memory and instructions synced from the same upgrade pass.`);
+  }
+  lines.push(end);
+  const block = lines.join('\n').trimEnd();
+  const existingStart = sourceText.indexOf(start);
+  const existingEnd = sourceText.indexOf(end);
+  if (existingStart !== -1 && existingEnd !== -1 && existingEnd > existingStart) {
+    const before = sourceText.slice(0, existingStart).trimEnd();
+    const after = sourceText.slice(existingEnd + end.length).trimStart();
+    return [before, block, after].filter(Boolean).join('\n\n').trimEnd() + '\n';
+  }
+  return `${String(sourceText || '').trimEnd()}\n\n${block}\n`;
+}
+
+function syncUpgradeMemory(workspace, report) {
+  const profileName = workspace.activeProfileName;
+  const profileMemoryPath = path.join(workspace.repoRoot, workspace.profile?.memory?.profileMemory || `memory/profile/${profileName}.md`);
+  const profileMemoryText = renderUpgradeMemoryBlock('profile', profileName, report);
+  fs.mkdirSync(path.dirname(profileMemoryPath), { recursive: true });
+  fs.writeFileSync(profileMemoryPath, mergeUpgradeMemory(fs.existsSync(profileMemoryPath) ? fs.readFileSync(profileMemoryPath, 'utf8') : '', profileMemoryText), 'utf8');
+
+  for (const host of report.hosts) {
+    const hostPath = resolveHostMemoryPath(workspace.repoRoot, host, 'host');
+    fs.mkdirSync(path.dirname(hostPath), { recursive: true });
+    const existing = fs.existsSync(hostPath) ? fs.readFileSync(hostPath, 'utf8') : '';
+    fs.writeFileSync(hostPath, mergeUpgradeMemory(existing, renderUpgradeMemoryBlock('host', host, report, host)), 'utf8');
+  }
+}
+
+function renderUpgradeMemoryBlock(scope, name, report, syncHost = report.activeHost) {
+  const lines = [];
+  lines.push('<!-- agent-system-upgrade-start -->');
+  lines.push(`# Agent Upgrade Sync`);
+  lines.push('');
+  lines.push(`Scope: ${scope}`);
+  lines.push(`Name: ${name}`);
+  lines.push(`Generated: ${report.generatedAt}`);
+  lines.push(`Agents upgraded: ${report.agents.length}`);
+  lines.push('');
+  for (const section of report.sections || []) {
+    const title = normalizeUpgradeHeading(section.heading);
+    const notes = upgradeNotesForTitle(title, section.body.join('\n'), { activeHostName: syncHost }, syncHost);
+    lines.push(`## ${title}`);
+    for (const note of notes) {
+      lines.push(`- ${note}`);
+    }
+    lines.push('');
+  }
+  lines.push('<!-- agent-system-upgrade-end -->');
+  return lines.join('\n').trimEnd() + '\n';
+}
+
+function mergeUpgradeMemory(existingText, block) {
+  const start = '<!-- agent-system-upgrade-start -->';
+  const end = '<!-- agent-system-upgrade-end -->';
+  const existingStart = existingText.indexOf(start);
+  const existingEnd = existingText.indexOf(end);
+  if (existingStart !== -1 && existingEnd !== -1 && existingEnd > existingStart) {
+    const before = existingText.slice(0, existingStart).trimEnd();
+    const after = existingText.slice(existingEnd + end.length).trimStart();
+    return [before, block.trimEnd(), after].filter(Boolean).join('\n\n').trimEnd() + '\n';
+  }
+  const header = existingText.trimEnd();
+  if (!header) {
+    return block;
+  }
+  return `${header}\n\n${block}`;
 }
 
 async function handleStatus(workspace, flags, positional) {
