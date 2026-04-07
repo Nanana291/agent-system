@@ -67,20 +67,19 @@ Short form:
 qwen extensions install Nanana291/agent-system
 ```
 
-## V0.4.5.5 scope
+## V0.4.6 scope
 
-This release adds automatic memory learning to the universal change workflow. It can scout repo changes from git status, auto-scaffold an intake, preview gate readiness, apply or roll back a change snapshot, suggest memory promotions, and auto-promote repeated lessons into profile memory during a successful gate.
+This release adds host-scoped memory learning to the universal change workflow. It can scout repo changes from git status, auto-scaffold an intake, preview gate readiness, apply or roll back a change snapshot, and auto-promote repeated lessons into the active host's own memory file during a successful gate.
 
 ## Memory layer
 
-The repo also carries an optional memory layer:
+The repo now treats memory as flat and host-specific:
 
-- `memory/system.md` for repository-wide durable rules
-- `memory/profile/<profile>.md` for profile-specific lessons
-- `memory/host/generic.md` for portable host notes
-- `memory/host/claude.md`, `memory/host/codex.md`, `memory/host/qwen.md` for host-specific behavior
+- `memory/host/claude.md` for Claude-specific lessons
+- `memory/host/codex.md` for Codex-specific lessons
+- `memory/host/qwen.md` for Qwen-specific lessons
 
-This is the answer to the "agent memory" question: not one global blob, but layered memory with clear ownership.
+The active host is the boundary. Lessons stay in that host's file unless they clearly belong there for future runs of the same host.
 
 ## CLI
 
@@ -93,14 +92,14 @@ node ./bin/agent-system.mjs gate --file templates/delivery-gate.md
 node ./bin/agent-system.mjs profile
 node ./bin/agent-system.mjs sync --write
 node ./bin/agent-system.mjs init demo-profile
-node ./bin/agent-system.mjs memory list profile
-node ./bin/agent-system.mjs memory add system "Keep route fallback deterministic."
+node ./bin/agent-system.mjs memory list host:qwen
+node ./bin/agent-system.mjs memory add host:qwen "Keep route fallback deterministic."
 node ./bin/agent-system.mjs memory search fallback
-node ./bin/agent-system.mjs memory promote profile system "When a mistake has a clear fix and prevention rule, record it here before promoting it outward."
+node ./bin/agent-system.mjs memory promote change host:qwen "When a mistake has a clear fix and prevention rule, record it here before promoting it outward."
 node ./bin/agent-system.mjs memory prune
 node ./bin/agent-system.mjs memory audit
 node ./bin/agent-system.mjs memory stats
-node ./bin/agent-system.mjs memory learn --apply
+node ./bin/agent-system.mjs memory learn --host qwen --apply
 node ./bin/agent-system.mjs status show
 node ./bin/agent-system.mjs status who
 node ./bin/agent-system.mjs status set --agent ghost --name Ghost --action "Waiting for ghost to finish auto farm" --state working --scope farm-loop --eta 08:00

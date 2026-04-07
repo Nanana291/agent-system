@@ -1,35 +1,32 @@
 # Memory Schema
 
-The memory layer is intentionally layered, not flat.
+The memory layer is intentionally flat and host-scoped.
 
 ## Files
 
-- `memory/system.md`
-- `memory/profile/<profile>.md`
-- `memory/host/generic.md`
 - `memory/host/claude.md`
 - `memory/host/codex.md`
 - `memory/host/qwen.md`
 
 ## Write policy
 
-- System memory: durable rules that apply across profiles and hosts.
-- Profile memory: durable lessons for one profile only.
-- Host memory: adaptation notes that depend on host behavior.
+- Claude memory stores durable Claude-specific lessons.
+- Codex memory stores durable Codex-specific lessons.
+- Qwen memory stores durable Qwen-specific lessons.
 
 ## Promotion rule
 
 When a mistake occurs:
 
-1. Record the smallest valid rule first.
-2. Promote it only if the same mistake would recur at a wider scope.
-3. Keep the human-facing docs in sync with the durable memory source.
+1. Record the smallest valid rule in the active host file first.
+2. Promote it only if the same host would benefit from seeing it again.
+3. Keep the host file as the source of truth for that host.
 
 ## Maintenance verbs
 
 - `memory search` finds rules by text.
-- `memory promote` moves a rule from a narrower scope to a wider scope.
-- `memory learn` auto-promotes repeated change lessons into profile or system memory.
+- `memory promote` moves a rule inside the active host boundary.
+- `memory learn` auto-promotes repeated change lessons into the active host memory file.
 - `memory prune` removes duplicate blank or repeated entries.
-- `memory audit` checks memory drift and scope conflicts.
-- `memory stats` reports file and entry counts for the memory tree.
+- `memory audit` checks host drift and scope conflicts.
+- `memory stats` reports file and entry counts for the host memory tree.

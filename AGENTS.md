@@ -29,12 +29,11 @@ Claude Code, Codex, and Qwen Code all read the same core contract. Each host has
 
 ## Memory contract
 
-- `memory/system.md` stores durable rules that apply to the whole repository.
-- `memory/profile/<profile>.md` stores profile-specific lessons and preferences.
-- `memory/host/generic.md` stores host-agnostic adaptation notes.
-- `memory/host/<host>.md` stores host-specific behavior when a host needs its own rule.
+- `memory/host/claude.md`, `memory/host/codex.md`, and `memory/host/qwen.md` store host-specific lessons.
+- The active host is the boundary for capture and promotion.
+- `memory/change/<host>.md` stores host-local change lessons before they are promoted into that same host's main memory file.
 
-Durable rules should be written where they belong first, then mirrored outward only if they remain true across a wider scope.
+Durable rules should be written where they belong first, then kept inside the host that learned them.
 
 ## Presence contract
 
@@ -46,8 +45,8 @@ Durable rules should be written where they belong first, then mirrored outward o
 - `change/current.json`, `change/history.jsonl`, and `change/intake.md` support a universal change workflow for updates and new projects.
 - `change analyze`, `change scout`, `change auto-scaffold`, `change scaffold`, `change preview`, `change apply`, `change diff`, `change rollback`, and `change gate` are the change workflow entry points.
 - `change memory-suggest` proposes durable lessons to promote from change memory.
-- `memory/change/<profile>.md` stores auto-captured lessons from change gates before promotion to profile or system memory.
-- `memory learn` can auto-promote repeated change lessons into profile or system memory during a successful gate.
+- `memory/change/<host>.md` stores auto-captured lessons from change gates before promotion into that same host's memory file.
+- `memory learn` auto-promotes repeated change lessons into the active host's memory file during a successful gate.
 
 ## V0.1 intent
 

@@ -6,3 +6,4 @@ Qwen-specific notes live here.
 
 - Prefer the native extension manifest and extension-local markdown files.
 - Keep command output concise and deterministic when using Qwen custom commands.
+- Keep Luau guidance compact and example-driven.

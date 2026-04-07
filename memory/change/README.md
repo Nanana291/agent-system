@@ -1,8 +1,8 @@
 # Change Memory
 
-This layer stores lessons captured from `change gate`.
+This layer stores lessons captured from `change gate` for the active host.
 
 ## Policy
 
 - Use it for change-specific lessons first.
-- Promote stable rules outward to profile memory or system memory later.
+- Promote stable rules into the active host memory file only.

@@ -194,15 +194,16 @@ test('change gate captures memory automatically on success', () => {
       '--owned-domains', 'logic,regression-risk',
       '--regression-matrix', 'templates/regression-matrix.md',
       '--old-new', 'bin/agent-system.mjs:bin/agent-system.mjs',
+      '--host', 'qwen',
     ], workspace);
 
     assert.equal(scaffold.status, 0, scaffold.stderr);
 
-    const gate = runChange(['gate'], workspace);
+    const gate = runChange(['gate', '--host', 'qwen'], workspace);
     assert.equal(gate.status, 0, gate.stderr);
     assert.match(gate.stdout, /Blocked \/ Ready: Ready/);
 
-    const memoryPath = path.join(workspace, 'memory', 'change', 'imphub.md');
+    const memoryPath = path.join(workspace, 'memory', 'change', 'qwen.md');
     assert.equal(existsSync(memoryPath), true);
     assert.match(readFileSync(memoryPath, 'utf8'), /Gate passed for update change targeting bin\/agent-system\.mjs/);
   } finally {
@@ -337,12 +338,12 @@ test('memory learn promotes repeated change lessons into profile memory', () => 
   const workspace = createWorkspace();
   try {
     writeFileSync(
-      path.join(workspace, 'memory', 'change', 'imphub.md'),
-      '# Imp Hub X Change Memory\n\n- Keep change previews aligned with gate output.\n- Keep change previews aligned with gate output.\n',
+      path.join(workspace, 'memory', 'change', 'qwen.md'),
+      '# Qwen Change Memory\n\n- Keep Luau examples compact and deterministic.\n- Keep Luau examples compact and deterministic.\n',
       'utf8',
     );
 
-    const result = spawnSync('node', [cli, 'memory', 'learn', '--apply'], {
+    const result = spawnSync('node', [cli, 'memory', 'learn', '--host', 'qwen', '--apply'], {
       cwd: workspace,
       encoding: 'utf8',
     });
@@ -350,8 +351,10 @@ test('memory learn promotes repeated change lessons into profile memory', () => 
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /\[MEMORY LEARN\]/);
 
-    const profileMemory = readFileSync(path.join(workspace, 'memory', 'profile', 'imphub.md'), 'utf8');
-    assert.match(profileMemory, /Keep change previews aligned with gate output\./);
+    const qwenMemory = readFileSync(path.join(workspace, 'memory', 'host', 'qwen.md'), 'utf8');
+    assert.match(qwenMemory, /Keep Luau examples compact and deterministic\./);
+    const changeMemory = readFileSync(path.join(workspace, 'memory', 'change', 'qwen.md'), 'utf8');
+    assert.match(changeMemory, /Keep Luau examples compact and deterministic\./);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }
@@ -374,17 +377,22 @@ test('change gate auto-runs memory learn after capture', () => {
     assert.equal(scaffold.status, 0, scaffold.stderr);
 
     writeFileSync(
-      path.join(workspace, 'memory', 'change', 'imphub.md'),
-      '# Imp Hub X Change Memory\n\n- Keep gate learn loops aligned with the same profile memory file.\n- Keep gate learn loops aligned with the same profile memory file.\n',
+      path.join(workspace, 'memory', 'change', 'qwen.md'),
+      '# Qwen Change Memory\n\n- Keep repeated Luau notes inside the active host only.\n- Keep repeated Luau notes inside the active host only.\n',
       'utf8',
     );
 
-    const gate = runChange(['gate'], workspace);
+    const gate = spawnSync('node', [cli, 'change', 'gate', '--host', 'qwen'], {
+      cwd: workspace,
+      encoding: 'utf8',
+    });
     assert.equal(gate.status, 0, gate.stderr);
     assert.match(gate.stdout, /Blocked \/ Ready: Ready/);
 
-    const profileMemory = readFileSync(path.join(workspace, 'memory', 'profile', 'imphub.md'), 'utf8');
-    assert.match(profileMemory, /Keep gate learn loops aligned with the same profile memory file\./);
+    const qwenMemory = readFileSync(path.join(workspace, 'memory', 'host', 'qwen.md'), 'utf8');
+    const claudeMemory = readFileSync(path.join(workspace, 'memory', 'host', 'claude.md'), 'utf8');
+    assert.match(qwenMemory, /Keep repeated Luau notes inside the active host only\./);
+    assert.doesNotMatch(claudeMemory, /Keep repeated Luau notes inside the active host only\./);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }
