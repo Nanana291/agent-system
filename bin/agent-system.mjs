@@ -31,6 +31,9 @@ async function main() {
     case 'status':
       await handleStatus(workspace, flags, positional);
       return;
+    case 'change':
+      await handleChange(workspace, flags, positional);
+      return;
     case 'route':
       printRouteSummary(workspace.profile, await readTaskText(positional));
       return;
@@ -128,6 +131,46 @@ function parseArgs(argv) {
       i += 1;
       continue;
     }
+    if (arg === '--type') {
+      flags.type = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--target') {
+      flags.target = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--intent') {
+      flags.intent = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--baseline') {
+      flags.baseline = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--classification') {
+      flags.classification = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--owned-domains') {
+      flags.ownedDomains = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--regression-matrix') {
+      flags.regressionMatrix = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--old-new') {
+      flags.oldNew = argv[i + 1];
+      i += 1;
+      continue;
+    }
     if (arg === '--task') {
       flags.task = argv[i + 1];
       i += 1;
@@ -187,6 +230,10 @@ function printHelp() {
     '  sync       Validate or regenerate profiles/<profile>/AGENTS.md',
     '  lint       Run the full repository consistency check',
     '  init       Create a new profile from the active profile template',
+    '  change     Analyze, scaffold, and gate a change workflow',
+    '    analyze  Produce a structured task lock for a change intent',
+    '    scaffold Create the intake and scaffold files for a change',
+    '    gate     Validate the current change intake and delivery gate',
     '  memory    Read or update layered memory files',
     '    search   Search memory files for matching text',
     '    promote  Promote a memory rule between scopes',
@@ -210,6 +257,14 @@ function printHelp() {
     '  --agent <id>      Set the status agent id',
     '  --name <text>     Set the human-facing agent name',
     '  --action <text>   Set the current action text',
+    '  --type <text>     Set the change type',
+    '  --target <path>   Set the change target',
+    '  --intent <text>   Set the change intent',
+    '  --baseline <path> Set the baseline file',
+    '  --classification <list>  Set comma-separated change classifications',
+    '  --owned-domains <list>    Set comma-separated owned domains',
+    '  --regression-matrix <path> Set the regression matrix template',
+    '  --old-new <text>  Set the old->new mapping summary',
     '  --task <text>     Set the attached task label',
     '  --route <text>    Set the attached route label',
     '  --state <text>    Set the current state label',
@@ -236,6 +291,12 @@ function loadWorkspace(profileName) {
   const statusDir = path.join(repoRoot, manifest.paths?.status || 'status');
   const statusCurrentPath = path.join(repoRoot, manifest.status?.current || 'status/current.json');
   const statusEventsPath = path.join(repoRoot, manifest.status?.events || 'status/events.jsonl');
+  const changeDir = path.join(repoRoot, manifest.paths?.change || 'change');
+  const changeCurrentPath = path.join(repoRoot, manifest.change?.current || 'change/current.json');
+  const changeHistoryPath = path.join(repoRoot, manifest.change?.history || 'change/history.jsonl');
+  const changeReadmePath = path.join(repoRoot, manifest.change?.readme || 'change/README.md');
+  const changeSchemaPath = path.join(repoRoot, manifest.change?.schema || 'docs/change-schema.md');
+  const changeTemplatePath = path.join(repoRoot, manifest.change?.intakeTemplate || 'templates/change-intake.md');
   const profile = fs.existsSync(profilePath) ? readJson(profilePath) : null;
 
   return {
@@ -249,13 +310,19 @@ function loadWorkspace(profileName) {
     statusDir,
     statusCurrentPath,
     statusEventsPath,
+    changeDir,
+    changeCurrentPath,
+    changeHistoryPath,
+    changeReadmePath,
+    changeSchemaPath,
+    changeTemplatePath,
     profile,
   };
 }
 
 function handleValidate(workspace) {
   const issues = [];
-  const { repoRoot, manifest, profile, profilePath, profileDocPath, statusCurrentPath, statusEventsPath } = workspace;
+  const { repoRoot, manifest, profile, profilePath, profileDocPath, statusCurrentPath, statusEventsPath, changeCurrentPath, changeHistoryPath, changeReadmePath, changeSchemaPath, changeTemplatePath } = workspace;
 
   if (!fs.existsSync(path.join(repoRoot, 'agent-system.json'))) {
     issues.push('missing agent-system.json');
@@ -290,6 +357,21 @@ function handleValidate(workspace) {
   }
   if (!fs.existsSync(statusEventsPath)) {
     issues.push(`missing status event log: ${path.relative(repoRoot, statusEventsPath)}`);
+  }
+  if (!fs.existsSync(changeCurrentPath)) {
+    issues.push(`missing change intake snapshot: ${path.relative(repoRoot, changeCurrentPath)}`);
+  }
+  if (!fs.existsSync(changeHistoryPath)) {
+    issues.push(`missing change history log: ${path.relative(repoRoot, changeHistoryPath)}`);
+  }
+  if (!fs.existsSync(changeReadmePath)) {
+    issues.push(`missing change readme: ${path.relative(repoRoot, changeReadmePath)}`);
+  }
+  if (!fs.existsSync(changeSchemaPath)) {
+    issues.push(`missing change schema: ${path.relative(repoRoot, changeSchemaPath)}`);
+  }
+  if (!fs.existsSync(changeTemplatePath)) {
+    issues.push(`missing change template: ${path.relative(repoRoot, changeTemplatePath)}`);
   }
 
   for (const dir of Object.values(manifest.paths || {})) {
@@ -529,6 +611,40 @@ function handleMemoryStats(workspace) {
   console.log(`Scopes: system=${stats.system}, profile=${stats.profile}, host=${stats.host}`);
 }
 
+async function handleChange(workspace, flags, positional) {
+  const action = positional[0] || 'analyze';
+  switch (action) {
+    case 'analyze': {
+      const intake = buildChangeIntake(workspace, flags, readChangeCurrent(workspace));
+      writeChangeRecord(workspace, intake, 'analyze');
+      console.log(renderChangeTaskLock(intake));
+      return;
+    }
+    case 'scaffold': {
+      const intake = buildChangeIntake(workspace, flags, readChangeCurrent(workspace));
+      const scaffoldedIntake = {
+        ...intake,
+        scaffoldedAt: intake.scaffoldedAt || new Date().toISOString(),
+      };
+      scaffoldChangeWorkspace(workspace, scaffoldedIntake);
+      writeChangeRecord(workspace, scaffoldedIntake, 'scaffold');
+      console.log(`Initialized change workspace: ${path.relative(workspace.repoRoot, workspace.changeDir)}`);
+      console.log(renderChangeTaskLock(scaffoldedIntake));
+      return;
+    }
+    case 'gate': {
+      const intake = readChangeCurrent(workspace);
+      const report = evaluateChangeGate(intake);
+      console.log(renderChangeGate(report));
+      process.exit(report.ready ? 0 : 1);
+      return;
+    }
+    default:
+      console.error(`Unknown change action: ${action}`);
+      process.exit(1);
+  }
+}
+
 async function handleStatus(workspace, flags, positional) {
   const action = positional[0] || 'show';
   switch (action) {
@@ -691,6 +807,11 @@ function buildLintReport(workspace) {
     ['status schema exists', () => fs.existsSync(path.join(workspace.repoRoot, workspace.manifest.status?.schema || 'docs/status-schema.md'))],
     ['status snapshot exists', () => fs.existsSync(workspace.statusCurrentPath)],
     ['status event log exists', () => fs.existsSync(workspace.statusEventsPath)],
+    ['change schema exists', () => fs.existsSync(workspace.changeSchemaPath)],
+    ['change snapshot exists', () => fs.existsSync(workspace.changeCurrentPath)],
+    ['change history exists', () => fs.existsSync(workspace.changeHistoryPath)],
+    ['change readme exists', () => fs.existsSync(workspace.changeReadmePath)],
+    ['change template exists', () => fs.existsSync(workspace.changeTemplatePath)],
     ['command script exists', () => fs.existsSync(path.join(workspace.repoRoot, 'bin', 'agent-system.mjs'))],
     ['memory audit clean', () => auditMemory(workspace.repoRoot, workspace.manifest, workspace.profile).ok],
   ];
@@ -926,6 +1047,352 @@ function appendMemoryEntry(filePath, text) {
   const current = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '';
   const next = `${current.trimEnd()}\n\n- ${text}\n`;
   fs.writeFileSync(filePath, next, 'utf8');
+}
+
+function createEmptyChangeIntake(workspace) {
+  return {
+    type: null,
+    name: null,
+    target: null,
+    intent: '',
+    processSkill: 'brainstorming',
+    routeSelected: '',
+    classification: [],
+    ownedDomains: [],
+    baselineFile: null,
+    regressionMatrix: null,
+    oldNewMapping: null,
+    stopLineRisks: [],
+    ready: false,
+    state: 'draft',
+    createdAt: null,
+    scaffoldedAt: null,
+    updatedAt: null,
+    gatedAt: null,
+    profile: workspace.activeProfileName,
+  };
+}
+
+function readChangeCurrent(workspace) {
+  const filePath = workspace.changeCurrentPath;
+  if (!fs.existsSync(filePath)) {
+    return createEmptyChangeIntake(workspace);
+  }
+  try {
+    return {
+      ...createEmptyChangeIntake(workspace),
+      ...readJson(filePath),
+    };
+  } catch {
+    return createEmptyChangeIntake(workspace);
+  }
+}
+
+function readChangeHistory(workspace) {
+  const filePath = workspace.changeHistoryPath;
+  if (!fs.existsSync(filePath)) {
+    return [];
+  }
+  const entries = [];
+  const lines = fs.readFileSync(filePath, 'utf8').split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      entries.push(JSON.parse(trimmed));
+    } catch {
+      continue;
+    }
+  }
+  return entries;
+}
+
+function writeChangeRecord(workspace, intake, eventType) {
+  const now = new Date().toISOString();
+  const current = {
+    ...createEmptyChangeIntake(workspace),
+    ...intake,
+    updatedAt: now,
+  };
+  fs.mkdirSync(path.dirname(workspace.changeCurrentPath), { recursive: true });
+  fs.writeFileSync(workspace.changeCurrentPath, JSON.stringify(current, null, 2) + '\n', 'utf8');
+
+  const history = readChangeHistory(workspace);
+  const record = {
+    ...current,
+    eventType,
+    sequence: history.length + 1,
+    recordedAt: now,
+  };
+  fs.mkdirSync(path.dirname(workspace.changeHistoryPath), { recursive: true });
+  fs.appendFileSync(workspace.changeHistoryPath, JSON.stringify(record) + '\n', 'utf8');
+  return current;
+}
+
+function buildChangeIntake(workspace, flags, current) {
+  const now = new Date().toISOString();
+  const currentIntake = current || createEmptyChangeIntake(workspace);
+  const type = flags.type || currentIntake.type || 'update';
+  const target = flags.target || currentIntake.target || inferChangeTarget(type, flags.name);
+  const name = flags.name || currentIntake.name || inferChangeName(target, workspace.activeProfileName);
+  const intent = flags.intent || currentIntake.intent || '';
+  const classification = normalizeChangeList(flags.classification || currentIntake.classification);
+  const ownedDomains = normalizeChangeList(flags.ownedDomains || currentIntake.ownedDomains);
+  const resolvedClassification = classification.length > 0 ? classification : inferChangeClassifications(type, target, intent);
+  const resolvedOwnedDomains = ownedDomains.length > 0 ? ownedDomains : resolvedClassification.slice();
+  const baselineFile = flags.baseline || currentIntake.baselineFile || inferBaselineFile(type, target);
+  const regressionMatrix = flags.regressionMatrix || currentIntake.regressionMatrix || inferRegressionMatrix(type);
+  const oldNewMapping = flags.oldNew || currentIntake.oldNewMapping || inferOldNewMapping(type, target);
+  const routeSelected = flags.route || currentIntake.routeSelected || inferChangeRoute(type);
+  const stopLineRisks = inferChangeRisks(type, target, intent, baselineFile, regressionMatrix, oldNewMapping, resolvedOwnedDomains);
+  const candidate = {
+    ...currentIntake,
+    type,
+    name,
+    target,
+    intent,
+    processSkill: 'brainstorming',
+    routeSelected,
+    classification: resolvedClassification,
+    ownedDomains: resolvedOwnedDomains,
+    baselineFile,
+    regressionMatrix,
+    oldNewMapping,
+    stopLineRisks,
+    profile: workspace.activeProfileName,
+    createdAt: currentIntake.createdAt || now,
+    updatedAt: now,
+  };
+  const gate = evaluateChangeGate(candidate);
+  return {
+    ...candidate,
+    ready: gate.ready,
+    state: gate.ready ? 'ready' : 'draft',
+    gatedAt: gate.ready ? now : currentIntake.gatedAt || null,
+  };
+}
+
+function scaffoldChangeWorkspace(workspace, intake) {
+  fs.mkdirSync(workspace.changeDir, { recursive: true });
+  fs.writeFileSync(workspace.changeCurrentPath, JSON.stringify(intake, null, 2) + '\n', 'utf8');
+  const intakeDoc = renderChangeIntakeDoc(intake, workspace);
+  const intakeDocPath = path.join(workspace.changeDir, 'intake.md');
+  fs.writeFileSync(intakeDocPath, intakeDoc, 'utf8');
+  if (!fs.existsSync(workspace.changeHistoryPath)) {
+    fs.writeFileSync(workspace.changeHistoryPath, '', 'utf8');
+  }
+}
+
+function renderChangeTaskLock(intake) {
+  const lines = [];
+  lines.push('[TASK LOCK]');
+  lines.push(`Task type: ${intake.type || 'unknown'}`);
+  lines.push(`Target file: ${intake.target || 'n/a'}`);
+  lines.push(`Route selected: ${intake.routeSelected || 'n/a'}`);
+  lines.push(`Process skill: ${intake.processSkill || 'brainstorming'}`);
+  lines.push(`Change classification: ${formatList(intake.classification)}`);
+  lines.push(`Baseline file: ${intake.baselineFile || 'n/a'}`);
+  lines.push(`Owned domains: ${formatList(intake.ownedDomains)}`);
+  lines.push(`Stop-line risks: ${formatList(intake.stopLineRisks)}`);
+  return lines.join('\n');
+}
+
+function evaluateChangeGate(intake) {
+  const type = intake?.type || 'unknown';
+  const needsBaseline = type !== 'new-project';
+  const needsRegression = type !== 'new-project';
+  const hasTarget = isFilled(intake?.target);
+  const hasIntent = isFilled(intake?.intent);
+  const hasClassification = Array.isArray(intake?.classification) && intake.classification.length > 0;
+  const hasOwnedDomains = Array.isArray(intake?.ownedDomains) && intake.ownedDomains.length > 0;
+  const hasBaseline = !needsBaseline || fileExistsForChangePath(intake?.baselineFile);
+  const hasRegression = !needsRegression || fileExistsForChangePath(intake?.regressionMatrix);
+  const hasOldNew = !needsRegression || isFilled(intake?.oldNewMapping);
+  const openRisks = Array.isArray(intake?.stopLineRisks) ? intake.stopLineRisks.filter(Boolean) : [];
+  const ready = hasTarget && hasIntent && hasClassification && hasOwnedDomains && hasBaseline && hasRegression && hasOldNew;
+  return {
+    type,
+    intakeCaptured: hasTarget && hasIntent,
+    baselineUpdated: hasBaseline,
+    regressionMatrix: hasRegression,
+    oldNewMapping: hasOldNew,
+    ownedDomainsClosed: hasOwnedDomains,
+    openRisks,
+    ready,
+  };
+}
+
+function fileExistsForChangePath(value) {
+  if (!isFilled(value)) {
+    return false;
+  }
+  const text = String(value).trim();
+  if (text === 'n/a' || text === 'none') {
+    return true;
+  }
+  return fs.existsSync(path.resolve(findRepoRoot(process.cwd()) || process.cwd(), text));
+}
+
+function renderChangeGate(report) {
+  const lines = [];
+  lines.push('[CHANGE GATE]');
+  lines.push(`Change type: ${report.type || 'unknown'}`);
+  lines.push(`Intake captured: ${formatYesNo(report.intakeCaptured)}`);
+  lines.push(`Baseline updated: ${formatYesNo(report.baselineUpdated)}`);
+  lines.push(`Regression matrix: ${formatYesNo(report.regressionMatrix)}`);
+  lines.push(`Old->new mapping: ${formatYesNo(report.oldNewMapping)}`);
+  lines.push(`Owned domains closed: ${formatYesNo(report.ownedDomainsClosed)}`);
+  lines.push(`Open risks: ${formatList(report.openRisks)}`);
+  lines.push(`Blocked / Ready: ${report.ready ? 'Ready' : 'Blocked'}`);
+  return lines.join('\n');
+}
+
+function renderChangeIntakeDoc(intake, workspace) {
+  const template = readOptionalText(workspace.changeTemplatePath);
+  const values = {
+    type: intake.type || 'update',
+    name: intake.name || 'change',
+    target: intake.target || '',
+    intent: intake.intent || '',
+    processSkill: intake.processSkill || 'brainstorming',
+    routeSelected: intake.routeSelected || '',
+    classification: formatList(intake.classification),
+    ownedDomains: formatList(intake.ownedDomains),
+    baselineFile: intake.baselineFile || '',
+    regressionMatrix: intake.regressionMatrix || '',
+    oldNewMapping: intake.oldNewMapping || '',
+    stopLineRisks: formatList(intake.stopLineRisks),
+    state: intake.state || 'draft',
+    profile: intake.profile || workspace.activeProfileName,
+  };
+  return fillTemplate(template || defaultChangeTemplate(), values);
+}
+
+function inferChangeTarget(type, name) {
+  if (type === 'new-project' && name) {
+    return name;
+  }
+  return '';
+}
+
+function inferChangeName(target, fallback) {
+  const base = String(target || fallback || 'change').split(/[\\/]/).filter(Boolean).pop() || 'change';
+  return base.replace(/\.m?js$/i, '').replace(/\.md$/i, '');
+}
+
+function inferChangeRoute(type) {
+  if (type === 'new-project') {
+    return 'bootstrap -> scaffold -> validate';
+  }
+  if (type === 'migration') {
+    return 'baseline -> migrate -> regression';
+  }
+  if (type === 'rewrite') {
+    return 'baseline -> rewrite -> verify';
+  }
+  return 'analyze -> scaffold -> gate';
+}
+
+function inferChangeClassifications(type, target, intent) {
+  const items = [];
+  if (type === 'new-project') {
+    items.push('config', 'lifecycle');
+  } else {
+    items.push('logic', 'regression-risk');
+  }
+  const text = `${target || ''} ${intent || ''}`.toLowerCase();
+  if (text.includes('ui') || text.includes('view') || text.includes('status')) items.push('ui');
+  if (text.includes('config') || text.includes('manifest') || text.includes('json')) items.push('config');
+  if (text.includes('memory') || text.includes('profile')) items.push('lifecycle');
+  if (text.includes('migration') || text.includes('rewrite')) items.push('migration');
+  return Array.from(new Set(items));
+}
+
+function inferBaselineFile(type, target) {
+  if (type === 'new-project') {
+    return 'n/a';
+  }
+  return target ? `docs/baselines/${path.basename(String(target))}.md` : 'docs/baselines/change.md';
+}
+
+function inferRegressionMatrix(type) {
+  return type === 'new-project' ? 'n/a' : 'templates/regression-matrix.md';
+}
+
+function inferOldNewMapping(type, target) {
+  if (type === 'new-project') {
+    return 'n/a';
+  }
+  if (!target) {
+    return 'n/a';
+  }
+  return `${target} -> ${target}`;
+}
+
+function inferChangeRisks(type, target, intent, baselineFile, regressionMatrix, oldNewMapping, ownedDomains) {
+  const risks = [];
+  if (!isFilled(target)) risks.push('missing target path');
+  if (!isFilled(intent)) risks.push('missing change intent');
+  if (type !== 'new-project' && !isFilled(baselineFile)) risks.push('missing baseline file');
+  if (type !== 'new-project' && !isFilled(regressionMatrix)) risks.push('missing regression matrix');
+  if (type !== 'new-project' && !isFilled(oldNewMapping)) risks.push('missing old->new mapping');
+  if (!Array.isArray(ownedDomains) || ownedDomains.length === 0) risks.push('missing owned domains');
+  return risks;
+}
+
+function normalizeChangeList(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean);
+  }
+  return String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function formatList(value) {
+  const items = Array.isArray(value) ? value : normalizeChangeList(value);
+  return items.length > 0 ? items.join(', ') : 'n/a';
+}
+
+function formatYesNo(value) {
+  return value ? 'yes' : 'no';
+}
+
+function fillTemplate(template, values) {
+  let output = template;
+  for (const [key, value] of Object.entries(values)) {
+    output = output.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), String(value ?? ''));
+  }
+  return output;
+}
+
+function defaultChangeTemplate() {
+  return [
+    '# {{name}}',
+    '',
+    '## Intent',
+    '',
+    '{{intent}}',
+    '',
+    '## Change Summary',
+    '',
+    '- Type: {{type}}',
+    '- Target: {{target}}',
+    '- Route: {{routeSelected}}',
+    '- Process skill: {{processSkill}}',
+    '- Classification: {{classification}}',
+    '- Owned domains: {{ownedDomains}}',
+    '- Baseline file: {{baselineFile}}',
+    '- Regression matrix: {{regressionMatrix}}',
+    '- Old -> new mapping: {{oldNewMapping}}',
+    '- Stop-line risks: {{stopLineRisks}}',
+    '',
+    '## Delivery Gate',
+    '',
+    '- State: {{state}}',
+    '- Profile: {{profile}}',
+  ].join('\n');
 }
 
 function buildHeartbeatSnapshot(current) {

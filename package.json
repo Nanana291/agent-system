@@ -1,6 +1,6 @@
 {
   "name": "agent-system",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "private": true,
   "type": "module",
   "description": "Agent-system CLI for validation, routing, sync, memory, and profile maintenance.",
@@ -27,6 +27,10 @@
     "status-who": "node ./bin/agent-system.mjs status who",
     "status-attach": "node ./bin/agent-system.mjs status attach",
     "watch": "node ./bin/agent-system.mjs status watch",
+    "change": "node ./bin/agent-system.mjs change",
+    "change-analyze": "node ./bin/agent-system.mjs change analyze",
+    "change-scaffold": "node ./bin/agent-system.mjs change scaffold",
+    "change-gate": "node ./bin/agent-system.mjs change gate",
     "export": "node ./bin/agent-system.mjs export",
     "import": "node ./bin/agent-system.mjs import"
   }

@@ -1,0 +1,21 @@
+{
+  "type": null,
+  "name": null,
+  "target": null,
+  "intent": "",
+  "processSkill": "brainstorming",
+  "routeSelected": "",
+  "classification": [],
+  "ownedDomains": [],
+  "baselineFile": null,
+  "regressionMatrix": null,
+  "oldNewMapping": null,
+  "stopLineRisks": [],
+  "ready": false,
+  "state": "draft",
+  "createdAt": null,
+  "scaffoldedAt": null,
+  "updatedAt": null,
+  "gatedAt": null,
+  "profile": "imphub"
+}

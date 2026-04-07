@@ -43,6 +43,8 @@ Durable rules should be written where they belong first, then mirrored outward o
 - `status watch` renders live presence lines for terminal use.
 - `status heartbeat`, `status who`, and `status attach` extend the presence layer into a simple session tracker.
 - The canonical human-facing format is `[AGENT] <name> | <action> | <elapsed>`.
+- `change/current.json`, `change/history.jsonl`, and `change/intake.md` support a universal change workflow for updates and new projects.
+- `change analyze`, `change scaffold`, and `change gate` are the change workflow entry points.
 
 ## V0.1 intent
 

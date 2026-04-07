@@ -58,9 +58,9 @@ Short form:
 qwen extensions install Nanana291/agent-system
 ```
 
-## V0.4.2 scope
+## V0.4.3 scope
 
-This release adds session-level status commands on top of the universal presence bus: `heartbeat`, `who`, and `attach`. The bus now works as a live presence layer and a lightweight session binder for terminal workflows.
+This release adds a universal change-orchestration layer on top of the presence bus. It turns an update or new-project intent into a task lock, scaffold, and delivery gate so changes are easier to plan, generate, and verify.
 
 ## Memory layer
 
@@ -99,6 +99,9 @@ node ./bin/agent-system.mjs status attach --agent ghost --task "memory audit" --
 node ./bin/agent-system.mjs status clear
 node ./bin/agent-system.mjs status watch --interval 2
 node ./bin/agent-system.mjs status list --limit 10
+node ./bin/agent-system.mjs change analyze --type update --target bin/agent-system.mjs --intent "add universal change orchestration"
+node ./bin/agent-system.mjs change scaffold --type new-project --name demo-change --target profiles/demo-change --intent "bootstrap a fresh agent workflow"
+node ./bin/agent-system.mjs change gate
 node ./bin/agent-system.mjs export --profile imphub
 node ./bin/agent-system.mjs import --file ./agent-system-export.json
 ```
