@@ -1,6 +1,6 @@
 {
   "name": "agent-system",
-  "version": "0.4.6",
+  "version": "0.4.6.5",
   "schemaVersion": 1,
   "purpose": "Universal route, ownership, handoff, and delivery-gate scaffold that complements Superpowers.",
   "superpowersIntegration": {
@@ -53,6 +53,7 @@
     "system": "memory/system.md",
     "profile": "memory/profile/<profile>.md",
     "change": "memory/change/<host>.md",
+    "packs": "memory/packs/<host>.md",
     "host": {
       "generic": "memory/host/generic.md",
       "claude": "memory/host/claude.md",
