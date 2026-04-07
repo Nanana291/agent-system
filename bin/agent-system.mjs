@@ -25,6 +25,9 @@ async function main() {
     case 'validate':
       handleValidate(workspace);
       return;
+    case 'lint':
+      handleLint(workspace);
+      return;
     case 'route':
       printRouteSummary(workspace.profile, await readTaskText(positional));
       return;
@@ -39,6 +42,12 @@ async function main() {
       return;
     case 'sync':
       handleSync(workspace, flags.write);
+      return;
+    case 'init':
+      handleInit(workspace, positional);
+      return;
+    case 'memory':
+      handleMemory(workspace, flags, positional);
       return;
     default:
       console.error(`Unknown command: ${command}`);
@@ -93,6 +102,9 @@ function printHelp() {
     '  gate       Validate [DELIVERY GATE] fields from markdown input or repo files',
     '  profile    Show active profile metadata',
     '  sync       Validate or regenerate profiles/<profile>/AGENTS.md',
+    '  lint       Run the full repository consistency check',
+    '  init       Create a new profile from the active profile template',
+    '  memory    Read or update layered memory files',
     '',
     'Flags:',
     '  --profile <name>  Override the active profile',
@@ -189,6 +201,15 @@ function handleValidate(workspace) {
   process.exit(1);
 }
 
+function handleLint(workspace) {
+  const report = buildLintReport(workspace);
+  console.log('Lint: ' + (report.ok ? 'OK' : 'FAILED'));
+  for (const item of report.items) {
+    console.log(`- ${item}`);
+  }
+  process.exit(report.ok ? 0 : 1);
+}
+
 async function readTaskText(positional) {
   if (positional.length > 0) {
     return positional.join(' ');
@@ -247,6 +268,59 @@ function printProfile(workspace) {
   console.log(`Review agents: ${(profile?.reviewAgents || []).join(', ')}`);
   console.log(`Memory: ${profile?.memory?.profileMemory || 'n/a'}`);
   console.log(`Source: ${path.relative(workspace.repoRoot, workspace.profilePath)}, ${path.relative(workspace.repoRoot, workspace.profileDocPath)}`);
+}
+
+function handleInit(workspace, positional) {
+  const profileName = positional[0];
+  if (!profileName) {
+    console.error('Usage: agent-system init <profile-name>');
+    process.exit(1);
+  }
+
+  const targetDir = path.join(workspace.repoRoot, 'profiles', profileName);
+  const targetProfilePath = path.join(targetDir, 'profile.json');
+  const targetDocPath = path.join(targetDir, 'AGENTS.md');
+  const template = cloneProfileTemplate(workspace.profile, profileName);
+
+  if (fs.existsSync(targetProfilePath) || fs.existsSync(targetDocPath)) {
+    console.error(`Profile already exists: ${profileName}`);
+    process.exit(1);
+  }
+
+  fs.mkdirSync(targetDir, { recursive: true });
+  fs.writeFileSync(targetProfilePath, JSON.stringify(template, null, 2) + '\n', 'utf8');
+  fs.writeFileSync(targetDocPath, renderProfileDoc({ ...template, sourceOfTruth: { structured: path.relative(workspace.repoRoot, targetProfilePath), human: path.relative(workspace.repoRoot, targetDocPath) } }, workspace.manifest), 'utf8');
+  ensureMemoryProfileFile(workspace.repoRoot, profileName);
+  console.log(`Initialized profile: ${profileName}`);
+}
+
+function handleMemory(workspace, flags, positional) {
+  const action = positional[0];
+  const target = positional[1] || workspace.activeProfileName;
+  if (!action) {
+    console.error('Usage: agent-system memory <list|add> [target] [text]');
+    process.exit(1);
+  }
+
+  if (action === 'list') {
+    console.log(listMemoryFiles(workspace.repoRoot, target).join('\n'));
+    return;
+  }
+
+  if (action === 'add') {
+    const text = positional.slice(2).join(' ').trim();
+    if (!text) {
+      console.error('Usage: agent-system memory add <system|profile|host[:name]> <text>');
+      process.exit(1);
+    }
+    const filePath = resolveMemoryTarget(workspace.repoRoot, target);
+    appendMemoryEntry(filePath, text);
+    console.log(`Updated ${path.relative(workspace.repoRoot, filePath)}`);
+    return;
+  }
+
+  console.error(`Unknown memory action: ${action}`);
+  process.exit(1);
 }
 
 function printRouteSummary(profile, taskText, explain = false) {
@@ -318,6 +392,104 @@ function handleSync(workspace, write) {
   console.log(`${path.relative(workspace.repoRoot, workspace.profileDocPath)} is out of sync`);
   console.log('Run `agent-system sync --write` to regenerate it.');
   process.exit(1);
+}
+
+function buildLintReport(workspace) {
+  const items = [];
+  const checks = [
+    ['manifest JSON', () => !!workspace.manifest],
+    ['default profile exists', () => fs.existsSync(path.join(workspace.repoRoot, 'profiles', workspace.activeProfileName, 'profile.json'))],
+    ['profile doc in sync', () => normalizeNewlines(fs.readFileSync(workspace.profileDocPath, 'utf8')) === normalizeNewlines(renderProfileDoc(workspace.profile, workspace.manifest))],
+    ['memory schema exists', () => fs.existsSync(path.join(workspace.repoRoot, workspace.manifest.memory?.schema || 'docs/memory-schema.md'))],
+    ['system memory exists', () => fs.existsSync(path.join(workspace.repoRoot, workspace.manifest.memory?.system || 'memory/system.md'))],
+  ];
+  for (const [label, fn] of checks) {
+    if (!fn()) items.push(label);
+  }
+
+  const routeIssues = [];
+  for (const [taskType, spec] of Object.entries(workspace.profile.taskTypes || {})) {
+    if (!Array.isArray(spec.route) || spec.route.length === 0) routeIssues.push(`task route missing: ${taskType}`);
+    if (!Array.isArray(spec.requiredArtifacts) || spec.requiredArtifacts.length === 0) routeIssues.push(`task artifacts missing: ${taskType}`);
+  }
+  items.push(...routeIssues);
+
+  return { ok: items.length === 0, items };
+}
+
+function cloneProfileTemplate(profile, nextName) {
+  return {
+    ...structuredCloneSafe(profile),
+    profile: nextName,
+    name: humanize(nextName),
+    status: 'draft',
+    description: `Profile pack for ${humanize(nextName)}.`,
+    sourceOfTruth: {
+      structured: `profiles/${nextName}/profile.json`,
+      human: `profiles/${nextName}/AGENTS.md`,
+    },
+    memory: {
+      profileMemory: `memory/profile/${nextName}.md`,
+      hostMemory: profile.memory?.hostMemory || undefined,
+      durabilityRule: 'When a mistake has a clear fix and prevention rule, record it in profile memory first.',
+    },
+  };
+}
+
+function ensureMemoryProfileFile(repoRoot, profileName) {
+  const filePath = path.join(repoRoot, 'memory', 'profile', `${profileName}.md`);
+  if (!fs.existsSync(filePath)) {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, `# ${humanize(profileName)} Memory\n\nProfile-specific lessons and preferences for ${profileName} live here.\n`, 'utf8');
+  }
+}
+
+function listMemoryFiles(repoRoot, target) {
+  const files = [];
+  if (target === 'system') {
+    files.push('memory/system.md');
+  } else if (target === 'profile') {
+    files.push(...walkFiles(path.join(repoRoot, 'memory', 'profile')).map((file) => path.relative(repoRoot, file)));
+  } else if (target.startsWith('host')) {
+    files.push(...walkFiles(path.join(repoRoot, 'memory', 'host')).map((file) => path.relative(repoRoot, file)));
+  } else {
+    files.push('memory/system.md');
+    files.push(...walkFiles(path.join(repoRoot, 'memory', 'profile')).map((file) => path.relative(repoRoot, file)));
+    files.push(...walkFiles(path.join(repoRoot, 'memory', 'host')).map((file) => path.relative(repoRoot, file)));
+  }
+  return files;
+}
+
+function resolveMemoryTarget(repoRoot, target) {
+  if (target === 'system') return path.join(repoRoot, 'memory', 'system.md');
+  if (target === 'profile') return path.join(repoRoot, 'memory', 'profile', 'imphub.md');
+  if (target.startsWith('host:')) {
+    const host = target.split(':')[1];
+    return path.join(repoRoot, 'memory', 'host', `${host}.md`);
+  }
+  return path.join(repoRoot, 'memory', 'system.md');
+}
+
+function appendMemoryEntry(filePath, text) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const current = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '';
+  const next = `${current.trimEnd()}\n\n- ${text}\n`;
+  fs.writeFileSync(filePath, next, 'utf8');
+}
+
+function walkFiles(dir) {
+  if (!fs.existsSync(dir)) return [];
+  const files = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) files.push(...walkFiles(full));
+    else if (entry.isFile()) files.push(full);
+  }
+  return files;
+}
+
+function structuredCloneSafe(value) {
+  return JSON.parse(JSON.stringify(value));
 }
 
 function renderProfileDoc(profile, manifest) {

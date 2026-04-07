@@ -1,9 +1,9 @@
 {
   "name": "agent-system",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "Minimal agent-system CLI for validating profiles and routing summaries.",
+  "description": "Agent-system CLI for validation, routing, sync, memory, and profile maintenance.",
   "bin": {
     "agent-system": "./bin/agent-system.mjs"
   },
@@ -13,6 +13,9 @@
     "explain": "node ./bin/agent-system.mjs explain",
     "gate": "node ./bin/agent-system.mjs gate",
     "profile": "node ./bin/agent-system.mjs profile",
-    "sync": "node ./bin/agent-system.mjs sync"
+    "sync": "node ./bin/agent-system.mjs sync",
+    "lint": "node ./bin/agent-system.mjs lint",
+    "init": "node ./bin/agent-system.mjs init",
+    "memory": "node ./bin/agent-system.mjs memory"
   }
 }

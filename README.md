@@ -12,21 +12,6 @@ Superpowers decides how to work: brainstorming, planning, debugging, or test-dri
 - `commands/`, `skills/`, `agents/`, and `templates/` provide the shared orchestration surface.
 - `adapters/` holds host-specific bootstrap notes for Claude Code, Codex, and Qwen Code.
 
-## CLI
-
-This repo also ships a minimal Node CLI:
-
-```bash
-node ./bin/agent-system.mjs validate
-node ./bin/agent-system.mjs route "ui sections status"
-node ./bin/agent-system.mjs explain "config persistence migration"
-node ./bin/agent-system.mjs gate --file templates/delivery-gate.md
-node ./bin/agent-system.mjs profile
-node ./bin/agent-system.mjs sync --write
-```
-
-If installed as a package, the binary name is `agent-system`.
-
 ## Supported hosts
 
 - Claude Code
@@ -73,9 +58,9 @@ Short form:
 qwen extensions install Nanana291/agent-system
 ```
 
-## V0.1 scope
+## V0.3 scope
 
-This release is the scaffold: a universal core, one profile pack shape, and thin host adapters. It is not a full autonomous dispatcher.
+This release adds a minimal maintenance CLI, layered memory, linting, profile init, and sync support. It is still not a full autonomous dispatcher.
 
 ## Memory layer
 
@@ -90,13 +75,17 @@ This is the answer to the "agent memory" question: not one global blob, but laye
 
 ## CLI
 
-The repo includes a small local CLI for validation and routing:
-
 ```bash
 node ./bin/agent-system.mjs validate
+node ./bin/agent-system.mjs lint
 node ./bin/agent-system.mjs route --task-type feature-addition
+node ./bin/agent-system.mjs explain "config persistence migration"
+node ./bin/agent-system.mjs gate --file templates/delivery-gate.md
 node ./bin/agent-system.mjs profile
 node ./bin/agent-system.mjs sync --write
+node ./bin/agent-system.mjs init demo-profile
+node ./bin/agent-system.mjs memory list profile
+node ./bin/agent-system.mjs memory add system "Keep route fallback deterministic."
 ```
 
 If you install the repo as a package, the binary is exposed as `agent-system`.

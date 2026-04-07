@@ -13,3 +13,5 @@ Durable rules that apply to the whole repository live here.
 - Superpowers decides process.
 - Agent System decides route, ownership, handoff, and delivery gates.
 - Structured manifests are authoritative over human-facing docs when they differ.
+
+- Keep route fallback deterministic.
