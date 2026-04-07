@@ -1,0 +1,49 @@
+{
+  "name": "agent-system",
+  "version": "0.1.0",
+  "schemaVersion": 1,
+  "purpose": "Universal route, ownership, handoff, and delivery-gate scaffold that complements Superpowers.",
+  "superpowersIntegration": {
+    "mode": "complementary-process-layer",
+    "divisionOfLabor": "Superpowers decides how to work; Agent System decides who owns what, what artifacts are required, and what proof closes delivery."
+  },
+  "supportedHosts": ["claude-code", "codex", "qwen-code"],
+  "bootstrap": {
+    "primaryDocs": ["README.md", "AGENTS.md"],
+    "hostDocs": {
+      "claude": "CLAUDE.md",
+      "codex": ".codex/INSTALL.md",
+      "qwen": "QWEN.md"
+    }
+  },
+  "paths": {
+    "commands": "commands",
+    "skills": "skills",
+    "agents": "agents",
+    "adapters": "adapters",
+    "profiles": "profiles",
+    "templates": "templates",
+    "docs": "docs"
+  },
+  "profileDiscovery": {
+    "defaultProfile": "imphub",
+    "profileManifest": "profiles/<profile>/profile.json",
+    "humanProfileDoc": "profiles/<profile>/AGENTS.md"
+  },
+  "artifacts": {
+    "taskLock": "templates/task-lock.md",
+    "handoff": "templates/handoff.md",
+    "deliveryGate": "templates/delivery-gate.md",
+    "regressionMatrix": "templates/regression-matrix.md"
+  },
+  "adapters": {
+    "claude": "adapters/claude/README.md",
+    "codex": "adapters/codex/README.md",
+    "qwen": "adapters/qwen/README.md"
+  },
+  "fallbackPolicy": {
+    "missingHostAdapter": "Use the root docs and profile manifest directly.",
+    "missingCommandSupport": "Emit the required artifact in markdown form.",
+    "missingSubagentSupport": "Perform the review step manually in the host session."
+  }
+}

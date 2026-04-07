@@ -1,0 +1,16 @@
+---
+description: Emit a HANDOFF block for the current owner stage
+---
+
+Use the active profile and current stage context to emit a valid `[HANDOFF]`.
+
+Requirements:
+
+- state what changed
+- state what is now locked and must not be silently rewritten
+- call out open risks
+- name the next agent or next review stage
+- include a proof target and regression impact note
+
+Stage context:
+{{args}}

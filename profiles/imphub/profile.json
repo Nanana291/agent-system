@@ -1,0 +1,424 @@
+{
+  "schemaVersion": 1,
+  "profile": "imphub",
+  "name": "Imp Hub X",
+  "description": "First real profile pack for the agent-system repository. It captures the Imp Hub X routing model, owned domains, proof requirements, and host-specific fallback rules.",
+  "status": "active",
+  "sourceOfTruth": {
+    "structured": "profiles/imphub/profile.json",
+    "human": "profiles/imphub/AGENTS.md"
+  },
+  "supportedHosts": ["claude", "codex", "qwen"],
+  "orchestrationSkills": [
+    "agent-routing",
+    "domain-ownership",
+    "delivery-gating",
+    "profile-selection",
+    "artifact-enforcement"
+  ],
+  "reviewAgents": [
+    "qa-inspector",
+    "architecture-reviewer"
+  ],
+  "classifications": [
+    "logic",
+    "ui",
+    "framing",
+    "terminology",
+    "compat",
+    "lifecycle",
+    "update",
+    "config",
+    "esp",
+    "optimization",
+    "regression-risk",
+    "migration",
+    "silent-aim",
+    "ui-system"
+  ],
+  "ownedDomains": [
+    {
+      "domain": "logic",
+      "owner": "scriptmaster",
+      "backup": "optimizer",
+      "notes": "Task flow, runtime behavior, remotes, selectors, and action dispatch."
+    },
+    {
+      "domain": "ui",
+      "owner": "ui-designer",
+      "backup": "feature-framer",
+      "notes": "LibSixtyTen layout, visible status text, section structure, and control grouping."
+    },
+    {
+      "domain": "framing",
+      "owner": "feature-framer",
+      "backup": "terminology-keeper",
+      "notes": "Parent-child meaning for new master-toggle groups."
+    },
+    {
+      "domain": "terminology",
+      "owner": "terminology-keeper",
+      "backup": "ui-designer",
+      "notes": "Visible labels, status wording, and cross-page naming consistency."
+    },
+    {
+      "domain": "compat",
+      "owner": "executor-specialist",
+      "backup": "qa-inspector",
+      "notes": "Executor gating, unsupported-path detection, and platform compatibility."
+    },
+    {
+      "domain": "lifecycle",
+      "owner": "lifecycle-manager",
+      "backup": "scriptmaster",
+      "notes": "Respawn, character rebinds, and long-lived connection ownership."
+    },
+    {
+      "domain": "update",
+      "owner": "update-steward",
+      "backup": "scriptmaster",
+      "notes": "Existing-script update scope and preserve-list features."
+    },
+    {
+      "domain": "config",
+      "owner": "config-keeper",
+      "backup": "executor-specialist",
+      "notes": "Persistence, migration, and autoload synchronization."
+    },
+    {
+      "domain": "esp",
+      "owner": "drawing-artist",
+      "backup": "ui-designer",
+      "notes": "Drawing API overlays and ESP rendering."
+    },
+    {
+      "domain": "optimization",
+      "owner": "optimizer",
+      "backup": "architecture-reviewer",
+      "notes": "Performance, register pressure, memory, and connection cleanup."
+    },
+    {
+      "domain": "regression-proof",
+      "owner": "qa-inspector",
+      "backup": "architecture-reviewer",
+      "notes": "Baseline comparison, regression matrices, and delivery gates."
+    }
+  ],
+  "requiredArtifacts": ["task-lock", "handoff", "delivery-gate", "regression-matrix"],
+  "artifactRules": {
+    "existingWorkRequiresBaseline": true,
+    "rewriteRequiresOldToNewMapping": true,
+    "reviewRequiresRegressionMatrix": true,
+    "deliveryRequiresOpenRiskStatement": true
+  },
+  "stopLineRisks": [
+    "orphaned callbacks",
+    "broken old feature parity",
+    "unsupported executor path",
+    "missing lifecycle rebind",
+    "unowned state",
+    "duplicated ownership"
+  ],
+  "proofExpectations": [
+    "task lock names the selected route and owned domains",
+    "handoff records what changed and what must not change next",
+    "delivery gate states the blocker or readiness outcome",
+    "regression matrix covers touched and untouched feature paths"
+  ],
+  "hosts": {
+    "claude": {
+      "bootstrap": "CLAUDE.md",
+      "preferredDocStyle": "structured markdown with explicit artifacts",
+      "degradation": "If a host feature is unavailable, keep the profile data authoritative and emit markdown artifacts only."
+    },
+    "codex": {
+      "bootstrap": ".codex/INSTALL.md",
+      "preferredDocStyle": "repo-local markdown and JSON",
+      "degradation": "Use local profile files and avoid assuming host-native slash commands."
+    },
+    "qwen": {
+      "bootstrap": "QWEN.md",
+      "preferredDocStyle": "plain markdown with compact routing blocks",
+      "degradation": "Fallback to profile docs and static artifacts if command integration is unavailable."
+    }
+  },
+  "taskTypes": {
+    "new-game-integration": {
+      "tags": ["logic", "compat", "lifecycle", "regression-risk"],
+      "route": [
+        "scout",
+        "lifecycle-manager",
+        "executor-specialist",
+        "scriptmaster",
+        "ghost-or-sentinel",
+        "architecture-reviewer",
+        "ui-designer",
+        "config-keeper",
+        "optimizer",
+        "qa-inspector"
+      ],
+      "requiredSkills": ["remote-discovery", "autofarm-core", "roblox-executor-compat", "lua-optimization"],
+      "requiredArtifacts": ["task-lock", "handoff", "delivery-gate", "regression-matrix"],
+      "proofExpectations": ["remote map", "failure matrix", "compat proof", "regression matrix"]
+    },
+    "feature-addition": {
+      "tags": ["logic", "ui", "update", "regression-risk"],
+      "route": [
+        "update-steward",
+        "lifecycle-manager",
+        "scriptmaster",
+        "ghost-or-sentinel",
+        "architecture-reviewer",
+        "executor-specialist",
+        "ui-designer",
+        "feature-framer",
+        "terminology-keeper",
+        "optimizer",
+        "qa-inspector"
+      ],
+      "requiredSkills": ["regression-audit", "existing-script-feature-injection"],
+      "requiredArtifacts": ["task-lock", "handoff", "delivery-gate", "regression-matrix"],
+      "proofExpectations": ["old to new map", "baseline update", "touched vs untouched path list"]
+    },
+    "full-rewrite-migration": {
+      "tags": ["migration", "ui", "logic", "regression-risk"],
+      "route": [
+        "migration-architect",
+        "lifecycle-manager",
+        "scriptmaster",
+        "ui-designer",
+        "terminology-keeper",
+        "ghost-or-sentinel",
+        "executor-specialist",
+        "architecture-reviewer",
+        "optimizer",
+        "qa-inspector"
+      ],
+      "requiredSkills": ["rewrite-migration", "LibSixtyTen", "imp-hub-status", "roblox-executor-compat", "lua-optimization"],
+      "requiredArtifacts": ["task-lock", "handoff", "delivery-gate", "regression-matrix"],
+      "proofExpectations": ["old to new map", "migration log", "baseline refresh"]
+    },
+    "boss-phases-hp-thresholds": {
+      "tags": ["logic", "optimization"],
+      "route": [
+        "boss-strategist",
+        "scriptmaster",
+        "ghost-or-sentinel",
+        "optimizer",
+        "qa-inspector"
+      ],
+      "requiredSkills": ["combat-patterns", "connection-management", "lua-optimization"],
+      "requiredArtifacts": ["task-lock", "handoff", "delivery-gate", "regression-matrix"],
+      "proofExpectations": ["phase map", "threshold handling", "retry or recovery policy"]
+    },
+    "farm-loop-single-mode": {
+      "tags": ["logic", "lifecycle", "optimization"],
+      "route": [
+        "lifecycle-manager",
+        "scriptmaster",
+        "ghost-or-sentinel",
+        "recovery-specialist",
+        "architecture-reviewer",
+        "optimizer",
+        "qa-inspector"
+      ],
+      "requiredSkills": ["autofarm-core", "connection-management", "lua-optimization"],
+      "requiredArtifacts": ["task-lock", "handoff", "delivery-gate", "regression-matrix"],
+      "proofExpectations": ["failure matrix", "loop owner", "recovery path"]
+    },
+    "farm-loop-multi-mode": {
+      "tags": ["logic", "lifecycle", "optimization"],
+      "route": [
+        "lifecycle-manager",
+        "scriptmaster",
+        "ghost-or-sentinel",
+        "recovery-specialist",
+        "architecture-reviewer",
+        "optimizer",
+        "qa-inspector"
+      ],
+      "requiredSkills": ["priority-autofarm", "autofarm-core", "connection-management", "lua-optimization"],
+      "requiredArtifacts": ["task-lock", "handoff", "delivery-gate", "regression-matrix"],
+      "proofExpectations": ["priority order", "fallback chain", "mode normalization"]
+    },
+    "kill-aura-combat": {
+      "tags": ["logic", "optimization", "regression-risk"],
+      "route": [
+        "scriptmaster",
+        "ghost-or-sentinel",
+        "recovery-specialist",
+        "architecture-reviewer",
+        "optimizer",
+        "qa-inspector"
+      ],
+      "requiredSkills": ["combat-patterns", "autofarm-core", "lua-optimization"],
+      "requiredArtifacts": ["task-lock", "handoff", "delivery-gate", "regression-matrix"],
+      "proofExpectations": ["target scoring", "combo flow", "kill tracking"]
+    },
+    "silent-aim": {
+      "tags": ["silent-aim", "compat", "regression-risk"],
+      "route": [
+        "sharpshooter",
+        "executor-specialist",
+        "ghost",
+        "architecture-reviewer",
+        "ui-designer",
+        "optimizer",
+        "qa-inspector"
+      ],
+      "requiredSkills": ["roblox-silent-aim", "roblox-exploit-api", "roblox-executor-compat", "lua-optimization"],
+      "requiredArtifacts": ["task-lock", "handoff", "delivery-gate", "regression-matrix"],
+      "proofExpectations": ["raycast path", "prediction path", "compat proof"]
+    },
+    "esp-drawing": {
+      "tags": ["esp", "ui", "optimization"],
+      "route": [
+        "drawing-artist",
+        "executor-specialist",
+        "optimizer",
+        "qa-inspector"
+      ],
+      "requiredSkills": ["creating-esp", "roblox-exploit-api", "lua-optimization"],
+      "requiredArtifacts": ["task-lock", "handoff", "delivery-gate", "regression-matrix"],
+      "proofExpectations": ["drawing path", "overlay ownership", "render budget notes"]
+    },
+    "ui-system-rewrite": {
+      "tags": ["ui-system", "ui", "framing", "terminology", "regression-risk"],
+      "route": [
+        "ui-maker",
+        "terminology-keeper",
+        "feature-framer",
+        "optimizer",
+        "qa-inspector"
+      ],
+      "requiredSkills": ["LibSixtyTen", "imp-hub-status", "existing-script-feature-injection", "autoload-safe-presets", "luau-register-budget", "lua-optimization"],
+      "requiredArtifacts": ["task-lock", "handoff", "delivery-gate", "regression-matrix"],
+      "proofExpectations": ["old to new map", "flag migration", "visible UX impact map"]
+    },
+    "ui-sections-status": {
+      "tags": ["ui", "terminology", "regression-risk"],
+      "route": [
+        "ui-designer",
+        "terminology-keeper",
+        "feature-framer",
+        "architecture-reviewer",
+        "optimizer",
+        "qa-inspector"
+      ],
+      "requiredSkills": ["LibSixtyTen", "imp-hub-status", "lua-optimization"],
+      "requiredArtifacts": ["task-lock", "handoff", "delivery-gate", "regression-matrix"],
+      "proofExpectations": ["status wording", "section hierarchy", "control visibility"]
+    },
+    "webhook-create-edit": {
+      "tags": ["ui", "config", "regression-risk"],
+      "route": [
+        "ui-designer",
+        "optimizer",
+        "qa-inspector"
+      ],
+      "requiredSkills": ["webhook-creation", "roblox-executor-compat", "lua-optimization"],
+      "requiredArtifacts": ["task-lock", "handoff", "delivery-gate", "regression-matrix"],
+      "proofExpectations": ["webhook payload", "executor compatibility", "error handling"]
+    },
+    "executor-detection-gating": {
+      "tags": ["compat", "regression-risk"],
+      "route": [
+        "executor-specialist",
+        "qa-inspector"
+      ],
+      "requiredSkills": ["roblox-exploit-api", "roblox-executor-compat"],
+      "requiredArtifacts": ["task-lock", "handoff", "delivery-gate", "regression-matrix"],
+      "proofExpectations": ["gating matrix", "fallback behavior", "unsupported-path handling"]
+    },
+    "remote-blocking-arg-modification": {
+      "tags": ["logic", "compat", "regression-risk"],
+      "route": [
+        "interceptor",
+        "executor-specialist",
+        "optimizer",
+        "qa-inspector"
+      ],
+      "requiredSkills": ["roblox-exploit-api", "remote-discovery"],
+      "requiredArtifacts": ["task-lock", "handoff", "delivery-gate", "regression-matrix"],
+      "proofExpectations": ["remote map", "intercept rule", "compat proof"]
+    },
+    "fps-boost-toggle": {
+      "tags": ["optimization", "ui"],
+      "route": [
+        "fps-architect",
+        "executor-specialist",
+        "ui-designer",
+        "optimizer",
+        "qa-inspector"
+      ],
+      "requiredSkills": ["lua-optimization"],
+      "requiredArtifacts": ["task-lock", "handoff", "delivery-gate", "regression-matrix"],
+      "proofExpectations": ["render path", "toggle binding", "performance notes"]
+    },
+    "macro-recording-replay": {
+      "tags": ["lifecycle", "ui", "optimization"],
+      "route": [
+        "macro-architect",
+        "lifecycle-manager",
+        "ui-designer",
+        "optimizer",
+        "qa-inspector"
+      ],
+      "requiredSkills": ["connection-management", "autofarm-core"],
+      "requiredArtifacts": ["task-lock", "handoff", "delivery-gate", "regression-matrix"],
+      "proofExpectations": ["record path", "replay path", "lifecycle rebind"]
+    },
+    "config-persistence-migration": {
+      "tags": ["config", "migration", "compat"],
+      "route": [
+        "config-keeper",
+        "executor-specialist",
+        "qa-inspector"
+      ],
+      "requiredSkills": ["roblox-executor-compat"],
+      "requiredArtifacts": ["task-lock", "handoff", "delivery-gate", "regression-matrix"],
+      "proofExpectations": ["config schema", "migration mapping", "autoload sync"]
+    },
+    "character-lifecycle-respawn": {
+      "tags": ["lifecycle", "regression-risk"],
+      "route": [
+        "lifecycle-manager",
+        "optimizer",
+        "qa-inspector"
+      ],
+      "requiredSkills": ["connection-management"],
+      "requiredArtifacts": ["task-lock", "handoff", "delivery-gate", "regression-matrix"],
+      "proofExpectations": ["respawn rebind", "connection cleanup", "restart safety"]
+    },
+    "register-budget-fix": {
+      "tags": ["optimization", "ui", "regression-risk"],
+      "route": [
+        "register-budget-surgeon",
+        "ui-designer",
+        "scriptmaster",
+        "optimizer",
+        "qa-inspector"
+      ],
+      "requiredSkills": ["luau-register-budget", "lua-optimization"],
+      "requiredArtifacts": ["task-lock", "handoff", "delivery-gate", "regression-matrix"],
+      "proofExpectations": ["budget reduction", "ownership map", "no behavior drift"]
+    },
+    "code-review-performance-pass": {
+      "tags": ["optimization", "regression-risk"],
+      "route": [
+        "optimizer",
+        "qa-inspector"
+      ],
+      "requiredSkills": ["lua-optimization", "connection-management", "spatial-math"],
+      "requiredArtifacts": ["task-lock", "handoff", "delivery-gate", "regression-matrix"],
+      "proofExpectations": ["findings list", "perf risks", "closed domains"]
+    }
+  },
+  "routeFallbacks": {
+    "logic": "feature-addition",
+    "ui": "ui-sections-status",
+    "compat": "executor-detection-gating",
+    "migration": "full-rewrite-migration",
+    "regression-risk": "code-review-performance-pass"
+  }
+}
