@@ -1,4 +1,13 @@
-# Agent System
+# AGENTS SYSTEM
+
+```text
+   ___                 __           __   ________
+  /   | ____ ___  ____/ /___  _____/ /  / ____/ /___  _________  _____
+ / /| |/ __ `__ \/ __  / __ \/ ___/ /  / /   / / __ \/ ___/ __ \/ ___/
+/ ___ / / / / / / /_/ / /_/ / /  / /__/ /___/ / /_/ / /  / /_/ (__  )
+/_/  |_/_/ /_/ /_/\__,_/\____/_/  /____/\____/_/\____/_/   \____/____/
+                         AGENTS SYSTEM
+```
 
 `agent-system` is a private orchestration layer for agentic coding work. It complements Superpowers instead of replacing it.
 
