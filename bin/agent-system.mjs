@@ -35,6 +35,9 @@ async function main() {
     case 'change':
       await handleChange(workspace, flags, positional);
       return;
+    case 'quick-update':
+      handleQuickUpdate(workspace, flags, positional);
+      return;
     case 'route':
       printRouteSummary(workspace.profile, await readTaskText(positional));
       return;
@@ -271,6 +274,7 @@ function printHelp() {
     '    diff     Compare the current intake against the last gate',
     '    rollback Restore the last committed change intake snapshot',
     '    gate     Validate the current change intake and delivery gate',
+    '  quick-update Prepare a fast update intake from target + intent',
     '  memory    Read or update layered memory files',
     '    search   Search memory files for matching text',
     '    promote  Promote a memory rule between scopes',
@@ -1091,6 +1095,41 @@ async function handleChange(workspace, flags, positional) {
       console.error(`Unknown change action: ${action}`);
       process.exit(1);
   }
+}
+
+function handleQuickUpdate(workspace, flags, positional) {
+  const current = readChangeCurrent(workspace);
+  const target = flags.target || positional[0] || current.target || '';
+  const intent = flags.intent || (flags.target ? positional.join(' ') : positional.slice(1).join(' ')) || current.intent || '';
+  if (!isFilled(target) || !isFilled(intent)) {
+    console.error('Usage: agent-system quick-update <target> <intent>');
+    process.exit(1);
+  }
+
+  const intake = buildChangeIntake(
+    workspace,
+    {
+      ...flags,
+      type: flags.type || 'update',
+      target,
+      intent,
+      name: flags.name || current.name || inferChangeName(target, workspace.activeProfileName),
+    },
+    current,
+    false,
+  );
+  const scaffoldedIntake = {
+    ...intake,
+    scaffoldedAt: intake.scaffoldedAt || new Date().toISOString(),
+  };
+  scaffoldChangeWorkspace(workspace, scaffoldedIntake);
+  writeChangeRecord(workspace, scaffoldedIntake, 'quick-update');
+
+  const report = evaluateChangeGate(scaffoldedIntake);
+  console.log('[QUICK UPDATE]');
+  console.log(renderChangeTaskLock(scaffoldedIntake));
+  console.log(renderChangePreview(scaffoldedIntake, report));
+  console.log(`Gate status: ${report.ready ? 'Ready' : 'Blocked'}`);
 }
 
 async function handleStatus(workspace, flags, positional) {

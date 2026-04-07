@@ -67,9 +67,9 @@ Short form:
 qwen extensions install Nanana291/agent-system
 ```
 
-## V0.5.0 scope
+## V0.5.1 scope
 
-This release adds portable backup and restore on top of the existing change, status, and host-memory workflows. The repository can now snapshot its mutable state into a single validated bundle, diff it against the live workspace, prune duplicate noise from the bundle, and restore it back into a clean checkout with post-restore validation.
+This release adds a quick-update entry point for Qwen and the other hosts. The repository can now prepare a ready-to-review update intake from just a target and intent, without relying on `git diff`, while still reusing the existing change, status, and memory state.
 
 ## Memory layer
 
@@ -126,6 +126,7 @@ node ./bin/agent-system.mjs change rollback
 node ./bin/agent-system.mjs change gate
 node ./bin/agent-system.mjs memory capture change
 node ./bin/agent-system.mjs change memory-suggest
+node ./bin/agent-system.mjs quick-update bin/agent-system.mjs "prepare a fast update path for qwen"
 node ./bin/agent-system.mjs backup ./agent-system-backup.json
 node ./bin/agent-system.mjs restore --file ./agent-system-backup.json
 node ./bin/agent-system.mjs bundle validate --file ./agent-system-backup.json

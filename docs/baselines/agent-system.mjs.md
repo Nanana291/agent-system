@@ -8,12 +8,13 @@
 
 ## Current Baseline Notes
 
-- `validate` checks the active profile, status files, change files, backup schema, and host memory layout.
-- `lint` enforces manifest consistency, memory drift checks, status presence, change presence, pack presence, and backup schema presence.
+- `validate` checks the active profile, status files, change files, backup schema, quick-update flow, and host memory layout.
+- `lint` enforces manifest consistency, memory drift checks, status presence, change presence, pack presence, backup schema presence, and quick-update coverage.
 - `status` owns presence, heartbeat, and session attachment.
 - `memory` owns review, compress, teach, gate, reflect, and learning pack generation per host.
 - `change` owns intake analysis, scaffold generation, preview/apply, rollback, and gate validation.
 - `backup`, `restore`, and `bundle` own portable snapshot capture, validation, diffing, and pruning.
+- `quick-update` owns fast update intake preparation from target and intent without git-diff dependence.
 
 ## Verification Targets
 
@@ -22,3 +23,4 @@
 - `node --test tests/status-cli.test.mjs`
 - `node --test tests/change-cli.test.mjs`
 - `node --test tests/backup-restore-cli.test.mjs`
+- `node --test tests/quick-update-cli.test.mjs`
