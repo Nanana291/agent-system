@@ -36,6 +36,13 @@ Claude Code, Codex, and Qwen Code all read the same core contract. Each host has
 
 Durable rules should be written where they belong first, then mirrored outward only if they remain true across a wider scope.
 
+## Presence contract
+
+- `status/current.json` stores the active agent presence snapshot.
+- `status/events.jsonl` stores append-only presence events.
+- `status watch` renders live presence lines for terminal use.
+- The canonical human-facing format is `[AGENT] <name> | <action> | <elapsed>`.
+
 ## V0.1 intent
 
 This is a bootstrap scaffold: enough structure to enforce routing and artifacts without trying to automate every decision.

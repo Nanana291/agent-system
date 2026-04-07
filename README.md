@@ -58,9 +58,9 @@ Short form:
 qwen extensions install Nanana291/agent-system
 ```
 
-## V0.4.0 scope
+## V0.4.1 scope
 
-This release expands memory into a real subsystem: search, promote, prune, audit, stats, and memory-focused export/import. It is still not a full autonomous dispatcher.
+This release adds a universal status bus for live agent presence, plus watchable status rendering for terminal workflows. It is still not a full autonomous dispatcher.
 
 ## Memory layer
 
@@ -91,6 +91,11 @@ node ./bin/agent-system.mjs memory promote profile system "When a mistake has a 
 node ./bin/agent-system.mjs memory prune
 node ./bin/agent-system.mjs memory audit
 node ./bin/agent-system.mjs memory stats
+node ./bin/agent-system.mjs status show
+node ./bin/agent-system.mjs status set --agent ghost --name Ghost --action "Waiting for ghost to finish auto farm" --state working --scope farm-loop --eta 08:00
+node ./bin/agent-system.mjs status clear
+node ./bin/agent-system.mjs status watch --interval 2
+node ./bin/agent-system.mjs status list --limit 10
 node ./bin/agent-system.mjs export --profile imphub
 node ./bin/agent-system.mjs import --file ./agent-system-export.json
 ```

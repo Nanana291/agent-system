@@ -28,6 +28,9 @@ async function main() {
     case 'lint':
       handleLint(workspace);
       return;
+    case 'status':
+      await handleStatus(workspace, flags, positional);
+      return;
     case 'route':
       printRouteSummary(workspace.profile, await readTaskText(positional));
       return;
@@ -100,6 +103,55 @@ function parseArgs(argv) {
       i += 1;
       continue;
     }
+    if (arg === '--interval') {
+      flags.interval = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--limit') {
+      flags.limit = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--agent') {
+      flags.agent = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--name') {
+      flags.name = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--action') {
+      flags.action = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--state') {
+      flags.state = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--scope') {
+      flags.scope = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--eta') {
+      flags.eta = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--detail') {
+      flags.detail = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--once') {
+      flags.once = true;
+      continue;
+    }
     if (arg === '--file' || arg === '-f') {
       flags.files = flags.files || [];
       flags.files.push(argv[i + 1]);
@@ -131,11 +183,27 @@ function printHelp() {
     '    prune    Remove duplicate or blank memory entries',
     '    audit    Check memory drift and scope conflicts',
     '    stats    Show memory file counts and entry counts',
+    '  status     Read or update live agent presence',
+    '    show     Print the current presence snapshot',
+    '    set      Update the current presence snapshot',
+    '    clear    Mark the current presence as inactive',
+    '    list     Print recent presence events',
+    '    watch    Render the current snapshot continuously',
     '  export     Export the active profile, memory, and manifest bundle',
     '  import     Import a previously exported bundle',
     '',
     'Flags:',
     '  --profile <name>  Override the active profile',
+    '  --agent <id>      Set the status agent id',
+    '  --name <text>     Set the human-facing agent name',
+    '  --action <text>   Set the current action text',
+    '  --state <text>    Set the current state label',
+    '  --scope <text>    Set the current scope label',
+    '  --eta <text>      Set the current ETA text',
+    '  --detail <text>   Set the current detail text',
+    '  --interval <sec>  Set status watch interval',
+    '  --limit <n>       Limit status list output',
+    '  --once            Render status watch once and exit',
     '  --file <path>     Read gate markdown from explicit file(s)',
     '  --write           Write regenerated profile markdown during sync',
     '  --help            Show this message',
@@ -150,6 +218,9 @@ function loadWorkspace(profileName) {
   const profileDir = path.join(repoRoot, 'profiles', activeProfileName);
   const profilePath = path.join(profileDir, 'profile.json');
   const profileDocPath = path.join(profileDir, 'AGENTS.md');
+  const statusDir = path.join(repoRoot, manifest.paths?.status || 'status');
+  const statusCurrentPath = path.join(repoRoot, manifest.status?.current || 'status/current.json');
+  const statusEventsPath = path.join(repoRoot, manifest.status?.events || 'status/events.jsonl');
   const profile = fs.existsSync(profilePath) ? readJson(profilePath) : null;
 
   return {
@@ -160,13 +231,16 @@ function loadWorkspace(profileName) {
     profileDir,
     profilePath,
     profileDocPath,
+    statusDir,
+    statusCurrentPath,
+    statusEventsPath,
     profile,
   };
 }
 
 function handleValidate(workspace) {
   const issues = [];
-  const { repoRoot, manifest, profile, profilePath, profileDocPath } = workspace;
+  const { repoRoot, manifest, profile, profilePath, profileDocPath, statusCurrentPath, statusEventsPath } = workspace;
 
   if (!fs.existsSync(path.join(repoRoot, 'agent-system.json'))) {
     issues.push('missing agent-system.json');
@@ -194,6 +268,13 @@ function handleValidate(workspace) {
     if (!fs.existsSync(path.join(repoRoot, file))) {
       issues.push(`missing artifact template: ${file}`);
     }
+  }
+
+  if (!fs.existsSync(statusCurrentPath)) {
+    issues.push(`missing status snapshot: ${path.relative(repoRoot, statusCurrentPath)}`);
+  }
+  if (!fs.existsSync(statusEventsPath)) {
+    issues.push(`missing status event log: ${path.relative(repoRoot, statusEventsPath)}`);
   }
 
   for (const dir of Object.values(manifest.paths || {})) {
@@ -433,6 +514,47 @@ function handleMemoryStats(workspace) {
   console.log(`Scopes: system=${stats.system}, profile=${stats.profile}, host=${stats.host}`);
 }
 
+async function handleStatus(workspace, flags, positional) {
+  const action = positional[0] || 'show';
+  switch (action) {
+    case 'show':
+      console.log(renderStatusLine(readStatusCurrent(workspace)));
+      return;
+    case 'set': {
+      const snapshot = buildStatusSnapshot(workspace, flags, readStatusCurrent(workspace));
+      writeStatusRecord(workspace, snapshot, 'set');
+      console.log(renderStatusLine(snapshot));
+      return;
+    }
+    case 'clear': {
+      const snapshot = createIdleStatusSnapshot();
+      snapshot.updatedAt = new Date().toISOString();
+      writeStatusRecord(workspace, snapshot, 'clear');
+      console.log(renderStatusLine(snapshot));
+      return;
+    }
+    case 'list': {
+      const events = readStatusEvents(workspace);
+      const limit = parseCount(flags.limit, 10);
+      const slice = (limit > 0 ? events.slice(-limit) : events).reverse();
+      if (slice.length === 0) {
+        console.log('No status events recorded.');
+        return;
+      }
+      for (const event of slice) {
+        console.log(renderStatusLine(event, event.recordedAt || event.updatedAt || new Date().toISOString(), true));
+      }
+      return;
+    }
+    case 'watch':
+      await watchStatus(workspace, flags);
+      return;
+    default:
+      console.error(`Unknown status action: ${action}`);
+      process.exit(1);
+  }
+}
+
 function handleExport(workspace, flags, positional) {
   const profileName = flags.profile || workspace.activeProfileName;
   const bundle = buildExportBundle(workspace, profileName);
@@ -532,6 +654,9 @@ function buildLintReport(workspace) {
     ['profile doc in sync', () => normalizeNewlines(fs.readFileSync(workspace.profileDocPath, 'utf8')) === normalizeNewlines(renderProfileDoc(workspace.profile, workspace.manifest))],
     ['memory schema exists', () => fs.existsSync(path.join(workspace.repoRoot, workspace.manifest.memory?.schema || 'docs/memory-schema.md'))],
     ['system memory exists', () => fs.existsSync(path.join(workspace.repoRoot, workspace.manifest.memory?.system || 'memory/system.md'))],
+    ['status schema exists', () => fs.existsSync(path.join(workspace.repoRoot, workspace.manifest.status?.schema || 'docs/status-schema.md'))],
+    ['status snapshot exists', () => fs.existsSync(workspace.statusCurrentPath)],
+    ['status event log exists', () => fs.existsSync(workspace.statusEventsPath)],
     ['command script exists', () => fs.existsSync(path.join(workspace.repoRoot, 'bin', 'agent-system.mjs'))],
     ['memory audit clean', () => auditMemory(workspace.repoRoot, workspace.manifest, workspace.profile).ok],
   ];
@@ -568,6 +693,10 @@ function buildExportBundle(workspace, profileName) {
         qwen: readOptionalText(path.join(workspace.repoRoot, workspace.manifest.memory?.host?.qwen || 'memory/host/qwen.md')),
       },
     },
+    status: {
+      current: readOptionalText(workspace.statusCurrentPath),
+      events: readOptionalText(workspace.statusEventsPath),
+    },
     memoryIndex: memoryStats(workspace.repoRoot),
   };
   return bundle;
@@ -594,6 +723,12 @@ function importBundle(repoRoot, bundle) {
       const hostPath = path.join(repoRoot, bundle.manifest?.memory?.host?.[host] || `memory/host/${host}.md`);
       writeOptionalText(hostPath, text);
     }
+  }
+  if (bundle.status?.current) {
+    writeOptionalText(path.join(repoRoot, bundle.manifest?.status?.current || 'status/current.json'), bundle.status.current);
+  }
+  if (bundle.status?.events) {
+    writeOptionalText(path.join(repoRoot, bundle.manifest?.status?.events || 'status/events.jsonl'), bundle.status.events);
   }
   return { profileName };
 }
@@ -757,6 +892,218 @@ function appendMemoryEntry(filePath, text) {
   const current = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '';
   const next = `${current.trimEnd()}\n\n- ${text}\n`;
   fs.writeFileSync(filePath, next, 'utf8');
+}
+
+function readStatusCurrent(workspace) {
+  const filePath = workspace.statusCurrentPath;
+  if (!fs.existsSync(filePath)) {
+    return createIdleStatusSnapshot();
+  }
+  try {
+    return { ...createIdleStatusSnapshot(), ...readJson(filePath) };
+  } catch {
+    return createIdleStatusSnapshot();
+  }
+}
+
+function readStatusEvents(workspace) {
+  const filePath = workspace.statusEventsPath;
+  if (!fs.existsSync(filePath)) {
+    return [];
+  }
+  const lines = fs.readFileSync(filePath, 'utf8').split(/\r?\n/);
+  const events = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      events.push(JSON.parse(trimmed));
+    } catch {
+      continue;
+    }
+  }
+  return events;
+}
+
+function writeStatusRecord(workspace, snapshot, eventType) {
+  const currentPath = workspace.statusCurrentPath;
+  const eventsPath = workspace.statusEventsPath;
+  const now = new Date().toISOString();
+  const current = {
+    ...createIdleStatusSnapshot(),
+    ...snapshot,
+    updatedAt: now,
+  };
+  fs.mkdirSync(path.dirname(currentPath), { recursive: true });
+  fs.writeFileSync(currentPath, JSON.stringify(current, null, 2) + '\n', 'utf8');
+
+  const events = readStatusEvents(workspace);
+  const record = {
+    ...current,
+    eventType,
+    sequence: events.length + 1,
+    recordedAt: now,
+  };
+  fs.mkdirSync(path.dirname(eventsPath), { recursive: true });
+  fs.appendFileSync(eventsPath, JSON.stringify(record) + '\n', 'utf8');
+  return current;
+}
+
+function buildStatusSnapshot(workspace, flags, current) {
+  const now = new Date().toISOString();
+  const currentSnapshot = current || createIdleStatusSnapshot();
+  const hasIntent = Boolean(flags.agent || flags.name || flags.action || flags.state || flags.scope || flags.eta || flags.detail);
+  const agent = flags.agent || (currentSnapshot.active ? currentSnapshot.agent : null) || normalizeAgentName(flags.name || currentSnapshot.name || currentSnapshot.scope || 'agent');
+  const name = flags.name || (flags.agent ? humanizeAgentName(flags.agent) : currentSnapshot.active ? currentSnapshot.name : humanizeAgentName(agent));
+  const scope = flags.scope || (currentSnapshot.active && currentSnapshot.agent === agent ? currentSnapshot.scope : inferScopeFromAgent(agent));
+  const state = flags.state || (hasIntent ? 'working' : currentSnapshot.state || 'idle');
+  const action = flags.action || (hasIntent ? 'Working' : currentSnapshot.action || 'No active agent');
+  const active = !['idle', 'inactive', 'done'].includes(String(state).toLowerCase());
+  const startedAt = currentSnapshot.active && currentSnapshot.agent === agent && currentSnapshot.scope === scope && currentSnapshot.startedAt
+    ? currentSnapshot.startedAt
+    : now;
+
+  return {
+    agent,
+    name,
+    action,
+    state,
+    scope,
+    startedAt,
+    updatedAt: now,
+    eta: flags.eta || currentSnapshot.eta || null,
+    detail: flags.detail || currentSnapshot.detail || '',
+    active,
+  };
+}
+
+function createIdleStatusSnapshot() {
+  return {
+    agent: null,
+    name: 'Idle',
+    action: 'No active agent',
+    state: 'idle',
+    scope: 'none',
+    startedAt: null,
+    updatedAt: null,
+    eta: null,
+    detail: '',
+    active: false,
+  };
+}
+
+function renderStatusLine(status, referenceTime = status.updatedAt || status.startedAt || new Date().toISOString(), compact = false) {
+  const elapsed = formatElapsed(status.startedAt, referenceTime);
+  const parts = [
+    `[AGENT] ${status.name || 'Idle'}`,
+    status.action || 'No active agent',
+    elapsed,
+  ];
+  if (status.scope && status.scope !== 'none') {
+    parts.push(`scope=${status.scope}`);
+  }
+  if (status.eta) {
+    parts.push(`eta=${status.eta}`);
+  }
+  if (status.state && (!compact || status.state !== 'working')) {
+    parts.push(`state=${status.state}`);
+  }
+  if (status.detail) {
+    parts.push(`detail=${status.detail}`);
+  }
+  return parts.join(' | ');
+}
+
+function formatElapsed(startedAt, referenceTime) {
+  if (!startedAt) {
+    return '00:00 elapsed';
+  }
+  const start = new Date(startedAt).getTime();
+  const end = new Date(referenceTime).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+    return '00:00 elapsed';
+  }
+  const totalSeconds = Math.floor((end - start) / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `${padNumber(hours)}:${padNumber(minutes)}:${padNumber(seconds)} elapsed`;
+  }
+  return `${padNumber(minutes)}:${padNumber(seconds)} elapsed`;
+}
+
+function parseCount(value, fallback) {
+  const parsed = Number.parseInt(String(value ?? ''), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function normalizeAgentName(value) {
+  return String(value || '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-zA-Z0-9_-]/g, '')
+    .toLowerCase() || null;
+}
+
+function humanizeAgentName(value) {
+  const text = String(value || '').trim();
+  if (!text) {
+    return 'Idle';
+  }
+  return text
+    .replace(/[-_]+/g, ' ')
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function inferScopeFromAgent(agent) {
+  const normalized = String(agent || '').trim().toLowerCase();
+  if (!normalized) {
+    return 'general';
+  }
+  if (normalized.includes('ghost')) {
+    return 'farm-loop';
+  }
+  if (normalized.includes('sentinel')) {
+    return 'watch';
+  }
+  return 'general';
+}
+
+async function watchStatus(workspace, flags) {
+  const intervalMs = Math.max(1, parseCount(flags.interval, 2)) * 1000;
+  const once = !!flags.once;
+  let lastLine = '';
+
+  while (true) {
+    const snapshot = readStatusCurrent(workspace);
+    const line = renderStatusLine(snapshot);
+    if (process.stdout.isTTY) {
+      const padded = line + ' '.repeat(Math.max(0, lastLine.length - line.length));
+      process.stdout.write(`\r${padded}`);
+      if (once) {
+        process.stdout.write('\n');
+      }
+    } else if (once || line !== lastLine) {
+      console.log(line);
+    }
+    if (once) {
+      return;
+    }
+    lastLine = line;
+    await sleep(intervalMs);
+  }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function padNumber(value) {
+  return String(value).padStart(2, '0');
 }
 
 function readOptionalText(filePath) {
