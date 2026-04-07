@@ -27,6 +27,15 @@ The repo standardizes these outputs:
 
 Claude Code, Codex, and Qwen Code all read the same core contract. Each host has a thin adapter doc, but the source of truth stays in the manifest and profile files.
 
+## Memory contract
+
+- `memory/system.md` stores durable rules that apply to the whole repository.
+- `memory/profile/<profile>.md` stores profile-specific lessons and preferences.
+- `memory/host/generic.md` stores host-agnostic adaptation notes.
+- `memory/host/<host>.md` stores host-specific behavior when a host needs its own rule.
+
+Durable rules should be written where they belong first, then mirrored outward only if they remain true across a wider scope.
+
 ## V0.1 intent
 
 This is a bootstrap scaffold: enough structure to enforce routing and artifacts without trying to automate every decision.

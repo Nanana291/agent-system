@@ -23,7 +23,8 @@
     "adapters": "adapters",
     "profiles": "profiles",
     "templates": "templates",
-    "docs": "docs"
+    "docs": "docs",
+    "memory": "memory"
   },
   "profileDiscovery": {
     "defaultProfile": "imphub",
@@ -45,5 +46,15 @@
     "missingHostAdapter": "Use the root docs and profile manifest directly.",
     "missingCommandSupport": "Emit the required artifact in markdown form.",
     "missingSubagentSupport": "Perform the review step manually in the host session."
+  },
+  "memory": {
+    "system": "memory/system.md",
+    "profile": "memory/profile/<profile>.md",
+    "host": {
+      "generic": "memory/host/generic.md",
+      "claude": "memory/host/claude.md",
+      "codex": "memory/host/codex.md",
+      "qwen": "memory/host/qwen.md"
+    }
   }
 }

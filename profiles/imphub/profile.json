@@ -8,6 +8,16 @@
     "structured": "profiles/imphub/profile.json",
     "human": "profiles/imphub/AGENTS.md"
   },
+  "memory": {
+    "profileMemory": "memory/profile/imphub.md",
+    "hostMemory": {
+      "generic": "memory/host/generic.md",
+      "claude": "memory/host/claude.md",
+      "codex": "memory/host/codex.md",
+      "qwen": "memory/host/qwen.md"
+    },
+    "durabilityRule": "When a mistake has a clear fix and prevention rule, record it in the profile memory first, then mirror only durable rules into host memory if they are host-specific."
+  },
   "supportedHosts": ["claude", "codex", "qwen"],
   "orchestrationSkills": [
     "agent-routing",
@@ -20,6 +30,7 @@
     "qa-inspector",
     "architecture-reviewer"
   ],
+  "defaultTaskType": "feature-addition",
   "classifications": [
     "logic",
     "ui",
