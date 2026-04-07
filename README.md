@@ -18,6 +18,46 @@ Superpowers decides how to work: brainstorming, planning, debugging, or test-dri
 - Codex
 - Qwen Code
 
+## Installation
+
+### Claude Code
+
+Add the repo as a private plugin marketplace, then install the plugin:
+
+```bash
+claude plugin marketplace add Nanana291/agent-system
+claude plugin install agent-system@agent-system-dev
+```
+
+If you prefer the interactive form inside Claude Code:
+
+```text
+/plugin marketplace add Nanana291/agent-system
+/plugin install agent-system@agent-system-dev
+```
+
+### Codex
+
+Tell Codex:
+
+```text
+Fetch and follow instructions from https://raw.githubusercontent.com/Nanana291/agent-system/refs/heads/main/.codex/INSTALL.md
+```
+
+### Qwen Code
+
+Install the repo as a native Qwen extension:
+
+```bash
+qwen extensions install https://github.com/Nanana291/agent-system
+```
+
+Short form:
+
+```bash
+qwen extensions install Nanana291/agent-system
+```
+
 ## V0.1 scope
 
 This release is the scaffold: a universal core, one profile pack shape, and thin host adapters. It is not a full autonomous dispatcher.

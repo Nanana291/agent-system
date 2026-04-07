@@ -1,6 +1,20 @@
-# Qwen Install
+# Installing Agent System for Qwen Code
 
-Use this repository from the repo root and treat `agent-system.json` as the authority for routing and artifact paths.
+Install the repository as a native Qwen extension. Qwen will load `QWEN.md`, `commands/`, `skills/`, and `agents/` from the extension.
+
+## Installation
+
+```bash
+qwen extensions install https://github.com/Nanana291/agent-system
+```
+
+Short form:
+
+```bash
+qwen extensions install Nanana291/agent-system
+```
+
+Restart Qwen Code after installation.
 
 ## Bootstrap
 
@@ -18,3 +32,9 @@ Use this repository from the repo root and treat `agent-system.json` as the auth
 ## Failure mode
 
 If Qwen cannot materialize a command or subagent feature, emit the required artifact in the chat or file output and keep the manifest consistent.
+
+## Updating
+
+```bash
+qwen extensions update agent-system
+```

@@ -1,0 +1,19 @@
+{
+  "name": "agent-system",
+  "description": "Universal route, ownership, handoff, and delivery-gate scaffold that complements Superpowers.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Nanana291"
+  },
+  "homepage": "https://github.com/Nanana291/agent-system",
+  "repository": "https://github.com/Nanana291/agent-system",
+  "license": "UNLICENSED",
+  "keywords": [
+    "agent-system",
+    "routing",
+    "handoff",
+    "delivery-gates",
+    "profiles",
+    "superpowers"
+  ]
+}
