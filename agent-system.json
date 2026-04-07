@@ -52,7 +52,7 @@
   "memory": {
     "system": "memory/system.md",
     "profile": "memory/profile/<profile>.md",
-    "change": "memory/change/<profile>.md",
+    "change": "memory/change/<host>.md",
     "host": {
       "generic": "memory/host/generic.md",
       "claude": "memory/host/claude.md",

@@ -687,7 +687,7 @@ function handleMemoryPrune(workspace) {
 }
 
 function handleMemoryAudit(workspace) {
-  const report = auditMemory(workspace.repoRoot, workspace.manifest, workspace.profile);
+  const report = auditMemory(workspace.repoRoot, workspace.manifest, workspace.profile, workspace.activeHostName);
   console.log(`Audit: ${report.ok ? 'OK' : 'FAILED'}`);
   for (const issue of report.issues) {
     console.log(`- ${issue}`);
@@ -989,7 +989,7 @@ function buildLintReport(workspace) {
     ['change template exists', () => fs.existsSync(workspace.changeTemplatePath)],
     ['change memory exists', () => fs.existsSync(workspace.changeMemoryPath) || hasAnyChangeMemoryFile(workspace.repoRoot)],
     ['command script exists', () => fs.existsSync(path.join(workspace.repoRoot, 'bin', 'agent-system.mjs'))],
-    ['memory audit clean', () => auditMemory(workspace.repoRoot, workspace.manifest, workspace.profile).ok],
+    ['memory audit clean', () => auditMemory(workspace.repoRoot, workspace.manifest, workspace.profile, workspace.activeHostName).ok],
   ];
   for (const [label, fn] of checks) {
     if (!fn()) items.push(label);
@@ -1017,7 +1017,7 @@ function buildExportBundle(workspace, profileName) {
     memory: {
       system: readOptionalText(path.join(workspace.repoRoot, workspace.manifest.memory?.system || 'memory/system.md')),
       profile: readOptionalText(path.join(workspace.repoRoot, profile.memory?.profileMemory || `memory/profile/${profileName}.md`)),
-      change: readOptionalText(workspace.changeMemoryPath || resolveTemplatePath(workspace.repoRoot, workspace.manifest.memory?.change, profileName, `memory/change/${profileName}.md`)),
+      change: readOptionalText(workspace.changeMemoryPath),
       host: {
         generic: readOptionalText(path.join(workspace.repoRoot, workspace.manifest.memory?.host?.generic || 'memory/host/generic.md')),
         claude: readOptionalText(path.join(workspace.repoRoot, workspace.manifest.memory?.host?.claude || 'memory/host/claude.md')),
@@ -1048,7 +1048,8 @@ function importBundle(repoRoot, bundle) {
     fs.writeFileSync(profileMemoryPath, bundle.memory.profile, 'utf8');
   }
   if (bundle.memory?.change) {
-    const changeMemoryPath = resolveTemplatePath(repoRoot, bundle.manifest?.memory?.change, profileName, `memory/change/${profileName}.md`);
+    const hostName = normalizeHostName(bundle?.host || process.env.AGENT_SYSTEM_HOST || 'qwen');
+    const changeMemoryPath = resolveHostMemoryPath(repoRoot, hostName, 'change');
     fs.mkdirSync(path.dirname(changeMemoryPath), { recursive: true });
     fs.writeFileSync(changeMemoryPath, bundle.memory.change, 'utf8');
   }
@@ -1123,12 +1124,12 @@ function pruneMemory(repoRoot) {
   return { pruned, notes };
 }
 
-function auditMemory(repoRoot, manifest, profile) {
+function auditMemory(repoRoot, manifest, profile, hostName) {
   const issues = [];
   const profileName = profile?.profile || 'imphub';
   const system = readOptionalText(path.join(repoRoot, manifest.memory?.system || 'memory/system.md'));
   const profileText = readOptionalText(path.join(repoRoot, profile?.memory?.profileMemory || `memory/profile/${profileName}.md`));
-  const changeText = readOptionalText(resolveTemplatePath(repoRoot, manifest.memory?.change, profileName, `memory/change/${profileName}.md`));
+  const changeText = readOptionalText(resolveHostMemoryPath(repoRoot, hostName || 'qwen', 'change'));
   const hostGeneric = readOptionalText(path.join(repoRoot, manifest.memory?.host?.generic || 'memory/host/generic.md'));
 
   if (!system.includes('Superpowers decides process')) issues.push('system memory missing core authority rule');
