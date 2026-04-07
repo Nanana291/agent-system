@@ -47,6 +47,7 @@ Durable rules should be written where they belong first, then mirrored outward o
 - `change analyze`, `change scout`, `change auto-scaffold`, `change scaffold`, `change preview`, `change apply`, `change diff`, `change rollback`, and `change gate` are the change workflow entry points.
 - `change memory-suggest` proposes durable lessons to promote from change memory.
 - `memory/change/<profile>.md` stores auto-captured lessons from change gates before promotion to profile or system memory.
+- `memory learn` can auto-promote repeated change lessons into profile or system memory during a successful gate.
 
 ## V0.1 intent
 

@@ -33,3 +33,7 @@ The change workflow stores a compact intake for updates and new-project bootstra
 ## Automatic memory capture
 
 When `change gate` passes or blocks, it appends a note to `memory/change/<profile>.md`. Stable lessons can be promoted later with `memory promote`.
+
+## Self-learning loop
+
+When `change gate` passes, it also runs `memory learn` so repeated change lessons can be promoted into profile memory automatically.

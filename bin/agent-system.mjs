@@ -71,6 +71,9 @@ async function main() {
     case 'memory-stats':
       handleMemoryStats(workspace);
       return;
+    case 'memory-learn':
+      handleMemoryLearn(workspace, flags);
+      return;
     case 'export':
       handleExport(workspace, flags, positional);
       return;
@@ -112,9 +115,22 @@ function parseArgs(argv) {
       i += 1;
       continue;
     }
+    if (arg === '--threshold') {
+      flags.threshold = argv[i + 1];
+      i += 1;
+      continue;
+    }
     if (arg === '--limit') {
       flags.limit = argv[i + 1];
       i += 1;
+      continue;
+    }
+    if (arg === '--apply') {
+      flags.apply = true;
+      continue;
+    }
+    if (arg === '--dry-run') {
+      flags.dryRun = true;
       continue;
     }
     if (arg === '--agent') {
@@ -249,6 +265,7 @@ function printHelp() {
     '    stats    Show memory file counts and entry counts',
     '    capture  Capture a change memory note automatically',
     '    suggest  Propose memory promotions from change lessons',
+    '    learn    Auto-promote repeated lessons into higher memory scopes',
     '  status     Read or update live agent presence',
     '    show     Print the current presence snapshot',
     '    who      Print the active session summary',
@@ -281,7 +298,10 @@ function printHelp() {
     '  --eta <text>      Set the current ETA text',
     '  --detail <text>   Set the current detail text',
     '  --interval <sec>  Set status watch interval',
+    '  --threshold <n>   Set memory learn promotion threshold',
     '  --limit <n>       Limit status list output',
+    '  --apply           Apply memory learn promotions',
+    '  --dry-run         Preview memory learn promotions without writing',
     '  --once            Render status watch once and exit',
     '  --file <path>     Read gate markdown from explicit file(s)',
     '  --write           Write regenerated profile markdown during sync',
@@ -531,7 +551,7 @@ function handleInit(workspace, positional) {
 function handleMemory(workspace, flags, positional) {
   const action = positional[0];
   if (!action) {
-    console.error('Usage: agent-system memory <list|add> [target] [text]');
+    console.error('Usage: agent-system memory <list|add|search|promote|prune|audit|stats|capture|learn> ...');
     process.exit(1);
   }
 
@@ -581,6 +601,11 @@ function handleMemory(workspace, flags, positional) {
 
   if (action === 'capture') {
     handleMemoryCapture(workspace, positional.slice(1));
+    return;
+  }
+
+  if (action === 'learn') {
+    handleMemoryLearn(workspace, flags);
     return;
   }
 
@@ -642,6 +667,28 @@ function handleMemoryStats(workspace) {
   console.log(`Files: ${stats.files}`);
   console.log(`Entries: ${stats.entries}`);
   console.log(`Scopes: system=${stats.system}, profile=${stats.profile}, host=${stats.host}, change=${stats.change}`);
+}
+
+function handleMemoryLearn(workspace, flags) {
+  const threshold = parseCount(flags.threshold, 2);
+  const apply = flags.dryRun ? false : flags.apply !== false;
+  const report = learnMemory(workspace.repoRoot, workspace.manifest, workspace.activeProfileName, threshold, apply);
+  console.log('[MEMORY LEARN]');
+  console.log(`Threshold: ${report.threshold}`);
+  console.log(`Apply: ${report.applied ? 'yes' : 'no'}`);
+  console.log(`Promoted: ${report.promoted}`);
+  if (report.duplicates.length > 0) {
+    console.log('Duplicate lessons:');
+    for (const line of report.duplicates) {
+      console.log(`- ${line}`);
+    }
+  }
+  if (report.promotions.length > 0) {
+    console.log('Promotions:');
+    for (const promotion of report.promotions) {
+      console.log(`- ${promotion.target}: ${promotion.text}`);
+    }
+  }
 }
 
 function handleMemoryCapture(workspace, positional) {
@@ -715,6 +762,9 @@ async function handleChange(workspace, flags, positional) {
       const intake = readChangeCurrent(workspace);
       const report = evaluateChangeGate(intake);
       captureChangeMemory(workspace, intake, report);
+      if (report.ready) {
+        learnMemory(workspace.repoRoot, workspace.manifest, workspace.activeProfileName, 2, true);
+      }
       writeChangeRecord(workspace, {
         ...intake,
         gatedAt: new Date().toISOString(),
@@ -1565,6 +1615,96 @@ function handleMemorySuggest(workspace) {
   for (const suggestion of suggestions) {
     console.log(`- ${suggestion}`);
   }
+}
+
+function learnMemory(repoRoot, manifest, profileName, threshold, apply) {
+  const changePath = resolveTemplatePath(repoRoot, manifest.memory?.change, profileName, `memory/change/${profileName}.md`);
+  const profilePath = resolveTemplatePath(repoRoot, manifest.memory?.profile, profileName, `memory/profile/${profileName}.md`);
+  const systemPath = path.join(repoRoot, manifest.memory?.system || 'memory/system.md');
+  const changeEntries = readMemoryBullets(changePath);
+  const profileEntries = readMemoryBullets(profilePath);
+  const systemEntries = readMemoryBullets(systemPath);
+  const counts = new Map();
+  const order = [];
+
+  for (const entry of changeEntries) {
+    const key = normalizeMemoryBullet(entry);
+    if (!counts.has(key)) {
+      counts.set(key, { text: entry, count: 0 });
+      order.push(key);
+    }
+    counts.get(key).count += 1;
+  }
+
+  const promotions = [];
+  const duplicateLines = [];
+  const profileSet = new Set(profileEntries.map((entry) => normalizeMemoryBullet(entry)));
+  const systemSet = new Set(systemEntries.map((entry) => normalizeMemoryBullet(entry)));
+
+  for (const key of order) {
+    const entry = counts.get(key);
+    if (!entry || entry.count < threshold) {
+      continue;
+    }
+    duplicateLines.push(entry.text);
+
+    if (!profileSet.has(key)) {
+      promotions.push({ target: 'profile', text: entry.text });
+      if (apply) {
+        appendMemoryEntry(profilePath, stripBulletPrefix(entry.text));
+        profileSet.add(key);
+      }
+    }
+
+    if (entry.count >= threshold + 1 && !systemSet.has(key) && isUniversalMemoryRule(entry.text)) {
+      promotions.push({ target: 'system', text: entry.text });
+      if (apply) {
+        appendMemoryEntry(systemPath, stripBulletPrefix(entry.text));
+        systemSet.add(key);
+      }
+    }
+  }
+
+  if (apply && promotions.length > 0) {
+    pruneMemory(repoRoot);
+  }
+
+  return {
+    threshold,
+    applied: apply,
+    promoted: promotions.length,
+    duplicates: duplicateLines,
+    promotions,
+  };
+}
+
+function readMemoryBullets(filePath) {
+  if (!fs.existsSync(filePath)) {
+    return [];
+  }
+  return fs.readFileSync(filePath, 'utf8')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('- '));
+}
+
+function normalizeMemoryBullet(text) {
+  return String(text || '').replace(/^\-\s+/, '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function stripBulletPrefix(text) {
+  return String(text || '').replace(/^\-\s+/, '').trim();
+}
+
+function isUniversalMemoryRule(text) {
+  const lowered = String(text || '').toLowerCase();
+  if (lowered.includes('host:') || lowered.includes('claude') || lowered.includes('qwen') || lowered.includes('codex')) {
+    return false;
+  }
+  if (lowered.includes('imphub') || lowered.includes('profile') || lowered.includes('change memory')) {
+    return false;
+  }
+  return lowered.includes('superpowers') || lowered.includes('agent system') || lowered.includes('route') || lowered.includes('memory');
 }
 
 function renderChangeIntakeDoc(intake, workspace) {

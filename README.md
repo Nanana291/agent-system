@@ -67,9 +67,9 @@ Short form:
 qwen extensions install Nanana291/agent-system
 ```
 
-## V0.4.5 scope
+## V0.4.5.5 scope
 
-This release adds change previewing, apply/rollback, diffing, and memory suggestions to the universal change workflow. It can scout repo changes from git status, auto-scaffold an intake, preview gate readiness, apply or roll back a change snapshot, and suggest memory promotions automatically.
+This release adds automatic memory learning to the universal change workflow. It can scout repo changes from git status, auto-scaffold an intake, preview gate readiness, apply or roll back a change snapshot, suggest memory promotions, and auto-promote repeated lessons into profile memory during a successful gate.
 
 ## Memory layer
 
@@ -100,6 +100,7 @@ node ./bin/agent-system.mjs memory promote profile system "When a mistake has a 
 node ./bin/agent-system.mjs memory prune
 node ./bin/agent-system.mjs memory audit
 node ./bin/agent-system.mjs memory stats
+node ./bin/agent-system.mjs memory learn --apply
 node ./bin/agent-system.mjs status show
 node ./bin/agent-system.mjs status who
 node ./bin/agent-system.mjs status set --agent ghost --name Ghost --action "Waiting for ghost to finish auto farm" --state working --scope farm-loop --eta 08:00

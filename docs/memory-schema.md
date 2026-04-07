@@ -29,6 +29,7 @@ When a mistake occurs:
 
 - `memory search` finds rules by text.
 - `memory promote` moves a rule from a narrower scope to a wider scope.
+- `memory learn` auto-promotes repeated change lessons into profile or system memory.
 - `memory prune` removes duplicate blank or repeated entries.
 - `memory audit` checks memory drift and scope conflicts.
 - `memory stats` reports file and entry counts for the memory tree.

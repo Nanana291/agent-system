@@ -21,6 +21,7 @@ This directory stores the current change intake and its event history.
 - `change rollback` restores the last committed change intake snapshot.
 - `change gate` checks whether the change is ready to ship.
 - `change gate` also captures a note into `memory/change/<profile>.md`.
+- A successful `change gate` also runs `memory learn` so repeated lessons can move into profile memory automatically.
 - `change memory-suggest` proposes durable lessons to promote from change memory.
 
 ## Expected flow

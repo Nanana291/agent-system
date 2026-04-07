@@ -332,3 +332,60 @@ test('memory suggest promotes durable change lessons', () => {
     rmSync(workspace, { recursive: true, force: true });
   }
 });
+
+test('memory learn promotes repeated change lessons into profile memory', () => {
+  const workspace = createWorkspace();
+  try {
+    writeFileSync(
+      path.join(workspace, 'memory', 'change', 'imphub.md'),
+      '# Imp Hub X Change Memory\n\n- Keep change previews aligned with gate output.\n- Keep change previews aligned with gate output.\n',
+      'utf8',
+    );
+
+    const result = spawnSync('node', [cli, 'memory', 'learn', '--apply'], {
+      cwd: workspace,
+      encoding: 'utf8',
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /\[MEMORY LEARN\]/);
+
+    const profileMemory = readFileSync(path.join(workspace, 'memory', 'profile', 'imphub.md'), 'utf8');
+    assert.match(profileMemory, /Keep change previews aligned with gate output\./);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('change gate auto-runs memory learn after capture', () => {
+  const workspace = createWorkspace();
+  try {
+    const scaffold = runChange([
+      'scaffold',
+      '--type', 'update',
+      '--target', 'bin/agent-system.mjs',
+      '--intent', 'auto learn from gate pass',
+      '--baseline', 'docs/baselines/agent-system.mjs.md',
+      '--classification', 'logic,regression-risk',
+      '--owned-domains', 'logic,regression-risk',
+      '--regression-matrix', 'templates/regression-matrix.md',
+      '--old-new', 'bin/agent-system.mjs:bin/agent-system.mjs',
+    ], workspace);
+    assert.equal(scaffold.status, 0, scaffold.stderr);
+
+    writeFileSync(
+      path.join(workspace, 'memory', 'change', 'imphub.md'),
+      '# Imp Hub X Change Memory\n\n- Keep gate learn loops aligned with the same profile memory file.\n- Keep gate learn loops aligned with the same profile memory file.\n',
+      'utf8',
+    );
+
+    const gate = runChange(['gate'], workspace);
+    assert.equal(gate.status, 0, gate.stderr);
+    assert.match(gate.stdout, /Blocked \/ Ready: Ready/);
+
+    const profileMemory = readFileSync(path.join(workspace, 'memory', 'profile', 'imphub.md'), 'utf8');
+    assert.match(profileMemory, /Keep gate learn loops aligned with the same profile memory file\./);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
