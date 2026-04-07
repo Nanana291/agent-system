@@ -24,3 +24,11 @@ When a mistake occurs:
 1. Record the smallest valid rule first.
 2. Promote it only if the same mistake would recur at a wider scope.
 3. Keep the human-facing docs in sync with the durable memory source.
+
+## Maintenance verbs
+
+- `memory search` finds rules by text.
+- `memory promote` moves a rule from a narrower scope to a wider scope.
+- `memory prune` removes duplicate blank or repeated entries.
+- `memory audit` checks memory drift and scope conflicts.
+- `memory stats` reports file and entry counts for the memory tree.

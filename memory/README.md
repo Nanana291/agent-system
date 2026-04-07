@@ -12,3 +12,4 @@ The rule is simple:
 1. Write the narrowest file that fits the rule.
 2. Promote outward only when the rule is durable at a wider scope.
 3. Keep host memory separate from profile memory.
+4. Use `memory search`, `memory promote`, `memory prune`, `memory audit`, and `memory stats` to keep the layer healthy.

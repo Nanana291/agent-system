@@ -7,6 +7,7 @@ Durable lessons and preferences for the `imphub` profile live here.
 - Record profile-specific rule fixes here first.
 - Mirror only durable host-independent rules into `memory/system.md`.
 - Mirror host-specific adaptations into `memory/host/<host>.md` when needed.
+- When a mistake has a clear fix and prevention rule, record it here before promoting it outward.
 
 ## Initial profile memory
 

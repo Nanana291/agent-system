@@ -49,6 +49,21 @@ async function main() {
     case 'memory':
       handleMemory(workspace, flags, positional);
       return;
+    case 'memory-search':
+      handleMemorySearch(workspace, positional);
+      return;
+    case 'memory-promote':
+      handleMemoryPromote(workspace, positional);
+      return;
+    case 'memory-prune':
+      handleMemoryPrune(workspace);
+      return;
+    case 'memory-audit':
+      handleMemoryAudit(workspace);
+      return;
+    case 'memory-stats':
+      handleMemoryStats(workspace);
+      return;
     case 'export':
       handleExport(workspace, flags, positional);
       return;
@@ -111,6 +126,11 @@ function printHelp() {
     '  lint       Run the full repository consistency check',
     '  init       Create a new profile from the active profile template',
     '  memory    Read or update layered memory files',
+    '    search   Search memory files for matching text',
+    '    promote  Promote a memory rule between scopes',
+    '    prune    Remove duplicate or blank memory entries',
+    '    audit    Check memory drift and scope conflicts',
+    '    stats    Show memory file counts and entry counts',
     '  export     Export the active profile, memory, and manifest bundle',
     '  import     Import a previously exported bundle',
     '',
@@ -304,18 +324,19 @@ function handleInit(workspace, positional) {
 
 function handleMemory(workspace, flags, positional) {
   const action = positional[0];
-  const target = positional[1] || workspace.activeProfileName;
   if (!action) {
     console.error('Usage: agent-system memory <list|add> [target] [text]');
     process.exit(1);
   }
 
   if (action === 'list') {
+    const target = positional[1] || workspace.activeProfileName;
     console.log(listMemoryFiles(workspace.repoRoot, target).join('\n'));
     return;
   }
 
   if (action === 'add') {
+    const target = positional[1] || workspace.activeProfileName;
     const text = positional.slice(2).join(' ').trim();
     if (!text) {
       console.error('Usage: agent-system memory add <system|profile|host[:name]> <text>');
@@ -327,8 +348,89 @@ function handleMemory(workspace, flags, positional) {
     return;
   }
 
+  if (action === 'search') {
+    handleMemorySearch(workspace, positional.slice(1));
+    return;
+  }
+
+  if (action === 'promote') {
+    handleMemoryPromote(workspace, positional.slice(1));
+    return;
+  }
+
+  if (action === 'prune') {
+    handleMemoryPrune(workspace);
+    return;
+  }
+
+  if (action === 'audit') {
+    handleMemoryAudit(workspace);
+    return;
+  }
+
+  if (action === 'stats') {
+    handleMemoryStats(workspace);
+    return;
+  }
+
   console.error(`Unknown memory action: ${action}`);
   process.exit(1);
+}
+
+function handleMemorySearch(workspace, positional) {
+  const query = positional.join(' ').trim();
+  if (!query) {
+    console.error('Usage: agent-system memory search <text>');
+    process.exit(1);
+  }
+  const hits = searchMemoryFiles(workspace.repoRoot, query);
+  console.log(`Hits: ${hits.length}`);
+  for (const hit of hits) {
+    console.log(`- ${hit.file}: ${hit.line}`);
+  }
+}
+
+function handleMemoryPromote(workspace, positional) {
+  const fromScope = positional[0];
+  const toScope = positional[1];
+  const query = positional.slice(2).join(' ').trim();
+  if (!fromScope || !toScope || !query) {
+    console.error('Usage: agent-system memory promote <fromScope> <toScope> <text>');
+    process.exit(1);
+  }
+  const fromFile = resolveMemoryTarget(workspace.repoRoot, fromScope, workspace.activeProfileName);
+  const toFile = resolveMemoryTarget(workspace.repoRoot, toScope, workspace.activeProfileName);
+  const text = findMemoryEntry(fromFile, query);
+  if (!text) {
+    console.error(`No entry matched in ${fromScope}: ${query}`);
+    process.exit(1);
+  }
+  appendMemoryEntry(toFile, text);
+  console.log(`Promoted rule from ${fromScope} to ${toScope}`);
+}
+
+function handleMemoryPrune(workspace) {
+  const report = pruneMemory(workspace.repoRoot);
+  console.log(`Pruned: ${report.pruned}`);
+  for (const note of report.notes) {
+    console.log(`- ${note}`);
+  }
+}
+
+function handleMemoryAudit(workspace) {
+  const report = auditMemory(workspace.repoRoot, workspace.manifest, workspace.profile);
+  console.log(`Audit: ${report.ok ? 'OK' : 'FAILED'}`);
+  for (const issue of report.issues) {
+    console.log(`- ${issue}`);
+  }
+  process.exit(report.ok ? 0 : 1);
+}
+
+function handleMemoryStats(workspace) {
+  const stats = memoryStats(workspace.repoRoot);
+  console.log(`Files: ${stats.files}`);
+  console.log(`Entries: ${stats.entries}`);
+  console.log(`Scopes: system=${stats.system}, profile=${stats.profile}, host=${stats.host}`);
 }
 
 function handleExport(workspace, flags, positional) {
@@ -431,6 +533,7 @@ function buildLintReport(workspace) {
     ['memory schema exists', () => fs.existsSync(path.join(workspace.repoRoot, workspace.manifest.memory?.schema || 'docs/memory-schema.md'))],
     ['system memory exists', () => fs.existsSync(path.join(workspace.repoRoot, workspace.manifest.memory?.system || 'memory/system.md'))],
     ['command script exists', () => fs.existsSync(path.join(workspace.repoRoot, 'bin', 'agent-system.mjs'))],
+    ['memory audit clean', () => auditMemory(workspace.repoRoot, workspace.manifest, workspace.profile).ok],
   ];
   for (const [label, fn] of checks) {
     if (!fn()) items.push(label);
@@ -465,6 +568,7 @@ function buildExportBundle(workspace, profileName) {
         qwen: readOptionalText(path.join(workspace.repoRoot, workspace.manifest.memory?.host?.qwen || 'memory/host/qwen.md')),
       },
     },
+    memoryIndex: memoryStats(workspace.repoRoot),
   };
   return bundle;
 }
@@ -492,6 +596,107 @@ function importBundle(repoRoot, bundle) {
     }
   }
   return { profileName };
+}
+
+function searchMemoryFiles(repoRoot, query) {
+  const hits = [];
+  for (const file of walkFiles(path.join(repoRoot, 'memory'))) {
+    const text = fs.readFileSync(file, 'utf8');
+    const lines = text.split(/\r?\n/);
+    lines.forEach((line, index) => {
+      if (line.toLowerCase().includes(query.toLowerCase())) {
+        hits.push({ file: path.relative(repoRoot, file), line: `${index + 1}: ${line.trim()}` });
+      }
+    });
+  }
+  return hits;
+}
+
+function findMemoryEntry(filePath, query) {
+  if (!fs.existsSync(filePath)) return '';
+  const lines = fs.readFileSync(filePath, 'utf8').split(/\r?\n/);
+  return lines.find((line) => line.toLowerCase().includes(query.toLowerCase()) && line.trim().startsWith('- ')) || '';
+}
+
+function pruneMemory(repoRoot) {
+  const notes = [];
+  let pruned = 0;
+  for (const file of walkFiles(path.join(repoRoot, 'memory'))) {
+    const text = fs.readFileSync(file, 'utf8');
+    const lines = text.split(/\r?\n/);
+    const seen = new Set();
+    const kept = [];
+    for (const line of lines) {
+      const normalized = line.trim();
+      if (!normalized) {
+        kept.push(line);
+        continue;
+      }
+      if (normalized.startsWith('- ')) {
+        const key = normalized.toLowerCase();
+        if (seen.has(key)) {
+          pruned += 1;
+          continue;
+        }
+        seen.add(key);
+      }
+      kept.push(line);
+    }
+    const next = kept.join('\n').replace(/\n{3,}/g, '\n\n');
+    if (next !== text) {
+      fs.writeFileSync(file, next.trimEnd() + '\n', 'utf8');
+      notes.push(`updated ${path.relative(repoRoot, file)}`);
+    }
+  }
+  return { pruned, notes };
+}
+
+function auditMemory(repoRoot, manifest, profile) {
+  const issues = [];
+  const profileName = profile?.profile || 'imphub';
+  const system = readOptionalText(path.join(repoRoot, manifest.memory?.system || 'memory/system.md'));
+  const profileText = readOptionalText(path.join(repoRoot, profile?.memory?.profileMemory || `memory/profile/${profileName}.md`));
+  const hostGeneric = readOptionalText(path.join(repoRoot, manifest.memory?.host?.generic || 'memory/host/generic.md'));
+
+  if (!system.includes('Superpowers decides process')) issues.push('system memory missing core authority rule');
+  if (!system.includes('Structured manifests are authoritative')) issues.push('system memory missing manifest authority rule');
+  if (!profileText.includes('Durable lessons and preferences')) issues.push('profile memory missing durable lessons note');
+  if (!profileText.includes('Do not silently move ownership')) issues.push('profile memory missing ownership guard');
+  if (!hostGeneric.includes('fallback host memory file')) issues.push('generic host memory missing fallback note');
+  if (profile?.memory?.durabilityRule && !profileText.includes('When a mistake has a clear fix')) {
+    issues.push('profile memory durability rule not reflected in profile memory file');
+  }
+
+  const manifestScopes = [
+    manifest.memory?.system,
+    manifest.memory?.host?.generic,
+    manifest.memory?.host?.claude,
+    manifest.memory?.host?.codex,
+    manifest.memory?.host?.qwen,
+    profile?.memory?.profileMemory,
+  ].filter(Boolean);
+  if (new Set(manifestScopes).size !== manifestScopes.length) {
+    issues.push('memory manifest contains duplicate paths');
+  }
+
+  return { ok: issues.length === 0, issues };
+}
+
+function memoryStats(repoRoot) {
+  const files = walkFiles(path.join(repoRoot, 'memory')).filter((file) => file.endsWith('.md'));
+  let entries = 0;
+  let system = 0;
+  let profile = 0;
+  let host = 0;
+  for (const file of files) {
+    const relative = path.relative(repoRoot, file);
+    const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
+    entries += lines.filter((line) => line.trim().startsWith('- ')).length;
+    if (relative.startsWith(`memory${path.sep}system`)) system += 1;
+    else if (relative.startsWith(`memory${path.sep}profile${path.sep}`)) profile += 1;
+    else if (relative.startsWith(`memory${path.sep}host${path.sep}`)) host += 1;
+  }
+  return { files: files.length, entries, system, profile, host };
 }
 
 function cloneProfileTemplate(profile, nextName) {

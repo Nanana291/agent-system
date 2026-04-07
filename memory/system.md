@@ -15,3 +15,5 @@ Durable rules that apply to the whole repository live here.
 - Structured manifests are authoritative over human-facing docs when they differ.
 
 - Keep route fallback deterministic.
+
+- - When a mistake has a clear fix and prevention rule, record it here before promoting it outward.
