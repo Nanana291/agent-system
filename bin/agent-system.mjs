@@ -49,6 +49,12 @@ async function main() {
     case 'memory':
       handleMemory(workspace, flags, positional);
       return;
+    case 'export':
+      handleExport(workspace, flags, positional);
+      return;
+    case 'import':
+      handleImport(workspace, flags, positional);
+      return;
     default:
       console.error(`Unknown command: ${command}`);
       process.exit(1);
@@ -105,6 +111,8 @@ function printHelp() {
     '  lint       Run the full repository consistency check',
     '  init       Create a new profile from the active profile template',
     '  memory    Read or update layered memory files',
+    '  export     Export the active profile, memory, and manifest bundle',
+    '  import     Import a previously exported bundle',
     '',
     'Flags:',
     '  --profile <name>  Override the active profile',
@@ -323,6 +331,26 @@ function handleMemory(workspace, flags, positional) {
   process.exit(1);
 }
 
+function handleExport(workspace, flags, positional) {
+  const profileName = flags.profile || workspace.activeProfileName;
+  const bundle = buildExportBundle(workspace, profileName);
+  const outputPath = positional[0] || path.join(workspace.repoRoot, `${profileName}-export.json`);
+  fs.writeFileSync(outputPath, JSON.stringify(bundle, null, 2) + '\n', 'utf8');
+  console.log(`Exported ${profileName} to ${outputPath}`);
+}
+
+function handleImport(workspace, flags, positional) {
+  const inputPath = flags.files?.[0] || positional[0];
+  if (!inputPath) {
+    console.error('Usage: agent-system import --file <bundle.json>');
+    process.exit(1);
+  }
+  const absolutePath = path.isAbsolute(inputPath) ? inputPath : path.resolve(workspace.repoRoot, inputPath);
+  const bundle = readJson(absolutePath);
+  const imported = importBundle(workspace.repoRoot, bundle);
+  console.log(`Imported ${imported.profileName}`);
+}
+
 function printRouteSummary(profile, taskText, explain = false) {
   const selection = selectTaskType(profile, taskText);
   console.log(`Profile: ${profile.profile} (${profile.name})`);
@@ -402,6 +430,7 @@ function buildLintReport(workspace) {
     ['profile doc in sync', () => normalizeNewlines(fs.readFileSync(workspace.profileDocPath, 'utf8')) === normalizeNewlines(renderProfileDoc(workspace.profile, workspace.manifest))],
     ['memory schema exists', () => fs.existsSync(path.join(workspace.repoRoot, workspace.manifest.memory?.schema || 'docs/memory-schema.md'))],
     ['system memory exists', () => fs.existsSync(path.join(workspace.repoRoot, workspace.manifest.memory?.system || 'memory/system.md'))],
+    ['command script exists', () => fs.existsSync(path.join(workspace.repoRoot, 'bin', 'agent-system.mjs'))],
   ];
   for (const [label, fn] of checks) {
     if (!fn()) items.push(label);
@@ -415,6 +444,54 @@ function buildLintReport(workspace) {
   items.push(...routeIssues);
 
   return { ok: items.length === 0, items };
+}
+
+function buildExportBundle(workspace, profileName) {
+  const profilePath = path.join(workspace.repoRoot, 'profiles', profileName, 'profile.json');
+  const profileDocPath = path.join(workspace.repoRoot, 'profiles', profileName, 'AGENTS.md');
+  const profile = readJson(profilePath);
+  const bundle = {
+    exportedAt: new Date().toISOString(),
+    manifest: workspace.manifest,
+    profile,
+    profileDoc: fs.readFileSync(profileDocPath, 'utf8'),
+    memory: {
+      system: readOptionalText(path.join(workspace.repoRoot, workspace.manifest.memory?.system || 'memory/system.md')),
+      profile: readOptionalText(path.join(workspace.repoRoot, profile.memory?.profileMemory || `memory/profile/${profileName}.md`)),
+      host: {
+        generic: readOptionalText(path.join(workspace.repoRoot, workspace.manifest.memory?.host?.generic || 'memory/host/generic.md')),
+        claude: readOptionalText(path.join(workspace.repoRoot, workspace.manifest.memory?.host?.claude || 'memory/host/claude.md')),
+        codex: readOptionalText(path.join(workspace.repoRoot, workspace.manifest.memory?.host?.codex || 'memory/host/codex.md')),
+        qwen: readOptionalText(path.join(workspace.repoRoot, workspace.manifest.memory?.host?.qwen || 'memory/host/qwen.md')),
+      },
+    },
+  };
+  return bundle;
+}
+
+function importBundle(repoRoot, bundle) {
+  const profileName = bundle?.profile?.profile || bundle?.profile?.name || 'imported-profile';
+  const targetProfileDir = path.join(repoRoot, 'profiles', profileName);
+  fs.mkdirSync(targetProfileDir, { recursive: true });
+  fs.writeFileSync(path.join(targetProfileDir, 'profile.json'), JSON.stringify(bundle.profile, null, 2) + '\n', 'utf8');
+  if (bundle.profileDoc) {
+    fs.writeFileSync(path.join(targetProfileDir, 'AGENTS.md'), bundle.profileDoc, 'utf8');
+  }
+  if (bundle.memory?.profile) {
+    const profileMemoryPath = path.join(repoRoot, bundle.profile?.memory?.profileMemory || `memory/profile/${profileName}.md`);
+    fs.mkdirSync(path.dirname(profileMemoryPath), { recursive: true });
+    fs.writeFileSync(profileMemoryPath, bundle.memory.profile, 'utf8');
+  }
+  if (bundle.memory?.system) {
+    writeOptionalText(path.join(repoRoot, bundle.manifest?.memory?.system || 'memory/system.md'), bundle.memory.system);
+  }
+  for (const [host, text] of Object.entries(bundle.memory?.host || {})) {
+    if (text) {
+      const hostPath = path.join(repoRoot, bundle.manifest?.memory?.host?.[host] || `memory/host/${host}.md`);
+      writeOptionalText(hostPath, text);
+    }
+  }
+  return { profileName };
 }
 
 function cloneProfileTemplate(profile, nextName) {
@@ -475,6 +552,15 @@ function appendMemoryEntry(filePath, text) {
   const current = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '';
   const next = `${current.trimEnd()}\n\n- ${text}\n`;
   fs.writeFileSync(filePath, next, 'utf8');
+}
+
+function readOptionalText(filePath) {
+  return fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '';
+}
+
+function writeOptionalText(filePath, text) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, text, 'utf8');
 }
 
 function walkFiles(dir) {

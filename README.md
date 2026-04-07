@@ -58,9 +58,9 @@ Short form:
 qwen extensions install Nanana291/agent-system
 ```
 
-## V0.3 scope
+## V0.3.5 scope
 
-This release adds a minimal maintenance CLI, layered memory, linting, profile init, and sync support. It is still not a full autonomous dispatcher.
+This release adds export/import for profiles and memory, plus stronger linting for command and docs drift. It is still not a full autonomous dispatcher.
 
 ## Memory layer
 
@@ -86,6 +86,8 @@ node ./bin/agent-system.mjs sync --write
 node ./bin/agent-system.mjs init demo-profile
 node ./bin/agent-system.mjs memory list profile
 node ./bin/agent-system.mjs memory add system "Keep route fallback deterministic."
+node ./bin/agent-system.mjs export --profile imphub
+node ./bin/agent-system.mjs import --file ./agent-system-export.json
 ```
 
 If you install the repo as a package, the binary is exposed as `agent-system`.
