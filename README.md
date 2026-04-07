@@ -67,9 +67,9 @@ Short form:
 qwen extensions install Nanana291/agent-system
 ```
 
-## V0.5.2 scope
+## V0.5.2.5 scope
 
-This release adds a multi-agent upgrade entry point that syncs instruction upgrades and memory across the agent layer. The repository can now apply upgrades directly to several agents at once, then mirror the durable lessons into the profile memory and each host memory file so Claude, Codex, and Qwen stay aligned.
+This release adds the multi-agent training loop. The repository can now train several agents at once, write the resulting instruction sync blocks into the active profile and host memories, record the lesson in docs, and keep the update path aligned for repeated runs without duplicating blocks.
 
 ## Memory layer
 
@@ -107,6 +107,9 @@ node ./bin/agent-system.mjs memory gate --host qwen
 node ./bin/agent-system.mjs memory reflect --host qwen
 node ./bin/agent-system.mjs memory packs generate --host qwen
 node ./bin/agent-system.mjs memory packs list --host qwen
+node ./bin/agent-system.mjs train
+node ./bin/agent-system.mjs train error --host qwen
+node ./bin/agent-system.mjs train replay --host qwen
 node ./bin/agent-system.mjs status show
 node ./bin/agent-system.mjs status who
 node ./bin/agent-system.mjs status set --agent ghost --name Ghost --action "Waiting for ghost to finish auto farm" --state working --scope farm-loop --eta 08:00

@@ -41,6 +41,9 @@ async function main() {
     case 'upgrade':
       handleUpgrade(workspace, flags, positional);
       return;
+    case 'train':
+      handleTrain(workspace, flags, positional);
+      return;
     case 'route':
       printRouteSummary(workspace.profile, await readTaskText(positional));
       return;
@@ -279,6 +282,7 @@ function printHelp() {
     '    gate     Validate the current change intake and delivery gate',
     '  quick-update Prepare a fast update intake from target + intent',
     '  upgrade    Apply multi-agent instruction and memory upgrades',
+    '  train      Train multiple agents and sync training memory and docs',
     '  memory    Read or update layered memory files',
     '    search   Search memory files for matching text',
     '    promote  Promote a memory rule between scopes',
@@ -359,6 +363,11 @@ function loadWorkspace(profileName, hostName) {
   const changeReadmePath = path.join(repoRoot, manifest.change?.readme || 'change/README.md');
   const changeSchemaPath = path.join(repoRoot, manifest.change?.schema || 'docs/change-schema.md');
   const changeTemplatePath = path.join(repoRoot, manifest.change?.intakeTemplate || 'templates/change-intake.md');
+  const trainingDir = path.join(repoRoot, manifest.paths?.training || 'docs/training');
+  const trainingCurrentPath = path.join(repoRoot, manifest.training?.current || 'docs/training/current.json');
+  const trainingHistoryPath = path.join(repoRoot, manifest.training?.history || 'docs/training/history.jsonl');
+  const trainingReadmePath = path.join(repoRoot, manifest.training?.readme || 'docs/training/README.md');
+  const trainingSchemaPath = path.join(repoRoot, manifest.training?.schema || 'docs/training-schema.md');
   const changeMemoryPath = resolveHostMemoryPath(repoRoot, activeHostName, 'change');
   const hostMemoryPath = resolveHostMemoryPath(repoRoot, activeHostName, 'host');
   const packMemoryPath = resolveHostMemoryPath(repoRoot, activeHostName, 'packs');
@@ -381,6 +390,11 @@ function loadWorkspace(profileName, hostName) {
     changeReadmePath,
     changeSchemaPath,
     changeTemplatePath,
+    trainingDir,
+    trainingCurrentPath,
+    trainingHistoryPath,
+    trainingReadmePath,
+    trainingSchemaPath,
     changeMemoryPath,
     hostMemoryPath,
     packMemoryPath,
@@ -430,7 +444,7 @@ function resolveTemplatePath(repoRoot, template, profileName, fallback = '') {
 
 function handleValidate(workspace) {
   const issues = [];
-  const { repoRoot, manifest, profile, profilePath, profileDocPath, statusCurrentPath, statusEventsPath, changeCurrentPath, changeHistoryPath, changeReadmePath, changeSchemaPath, changeTemplatePath, changeMemoryPath } = workspace;
+  const { repoRoot, manifest, profile, profilePath, profileDocPath, statusCurrentPath, statusEventsPath, changeCurrentPath, changeHistoryPath, changeReadmePath, changeSchemaPath, changeTemplatePath, changeMemoryPath, trainingCurrentPath, trainingHistoryPath, trainingReadmePath, trainingSchemaPath } = workspace;
 
   if (!fs.existsSync(path.join(repoRoot, 'agent-system.json'))) {
     issues.push('missing agent-system.json');
@@ -489,6 +503,18 @@ function handleValidate(workspace) {
   }
   if (!fs.existsSync(changeMemoryPath) && !hasAnyChangeMemoryFile(repoRoot)) {
     issues.push(`missing change memory: ${path.relative(repoRoot, changeMemoryPath)}`);
+  }
+  if (!fs.existsSync(trainingCurrentPath)) {
+    issues.push(`missing training snapshot: ${path.relative(repoRoot, trainingCurrentPath)}`);
+  }
+  if (!fs.existsSync(trainingHistoryPath)) {
+    issues.push(`missing training history: ${path.relative(repoRoot, trainingHistoryPath)}`);
+  }
+  if (!fs.existsSync(trainingReadmePath)) {
+    issues.push(`missing training readme: ${path.relative(repoRoot, trainingReadmePath)}`);
+  }
+  if (!fs.existsSync(trainingSchemaPath)) {
+    issues.push(`missing training schema: ${path.relative(repoRoot, trainingSchemaPath)}`);
   }
 
   for (const dir of Object.values(manifest.paths || {})) {
@@ -1162,6 +1188,315 @@ function handleUpgrade(workspace, flags, positional) {
   console.log(`Hosts synced: ${report.hosts.join(', ')}`);
 }
 
+function handleTrain(workspace, flags, positional) {
+  const modeInput = positional[0];
+  const mode = normalizeTrainMode(modeInput);
+  if (modeInput && mode !== modeInput.trim().toLowerCase()) {
+    console.error(`Unknown train action: ${modeInput}`);
+    process.exit(1);
+  }
+  const hostName = normalizeHostName(flags.host || workspace.activeHostName);
+  const report = buildTrainingReport(workspace, hostName, mode);
+  syncTrainingArtifacts(workspace, report);
+  writeTrainingRecord(workspace, report);
+  captureTrainingMemory(workspace, report);
+
+  console.log('[TRAIN]');
+  console.log(`Mode: ${report.mode}`);
+  console.log(`Outcome: ${report.outcome}`);
+  console.log(`Agents trained: ${report.agents.length}`);
+  console.log(`Training log: ${path.relative(workspace.repoRoot, report.summaryPath)}`);
+  for (const agent of report.agents) {
+    console.log(`- ${agent.title}`);
+  }
+}
+
+function normalizeTrainMode(value) {
+  const mode = String(value || 'success').trim().toLowerCase();
+  if (mode === 'error' || mode === 'review' || mode === 'replay' || mode === 'promote' || mode === 'sync') {
+    return mode;
+  }
+  return value ? 'invalid' : 'success';
+}
+
+function buildTrainingReport(workspace, hostName, mode) {
+  const now = new Date().toISOString();
+  const current = readTrainingCurrent(workspace);
+  const history = readTrainingHistory(workspace);
+  const latest = mode === 'replay' ? history[history.length - 1] || current : current;
+  const agents = buildTrainingAgents(workspace.profile);
+  const outcome = mode === 'error' ? 'held' : mode === 'review' ? 'reviewed' : mode === 'replay' ? 'replayed' : mode === 'promote' ? 'promoted' : 'applied';
+  const sessionId = `${now.replace(/[:.]/g, '-')}-${hostName}-${mode}`;
+  const summaryPath = path.join(workspace.trainingDir, `${sessionId}.md`);
+  const lesson = buildTrainingLesson(mode, hostName, latest, agents, workspace.profile);
+
+  return {
+    kind: 'agent-system-training',
+    version: 1,
+    mode,
+    outcome,
+    activeProfile: workspace.activeProfileName,
+    activeHost: hostName,
+    sessionId,
+    generatedAt: now,
+    agents,
+    lesson,
+    summaryPath,
+    current,
+    latest,
+  };
+}
+
+function buildTrainingAgents(profile) {
+  const agents = [];
+  const seen = new Set();
+  for (const domain of profile?.ownedDomains || []) {
+    const title = humanize(String(domain.owner || 'agent'));
+    const key = normalize(title);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    agents.push({
+      title,
+      role: domain.owner || 'agent',
+      domain: domain.domain || 'unknown',
+      notes: [
+        domain.notes || 'Keep the owned domain stable.',
+        'Keep ownership explicit and preserve baseline proof when the domain changes.',
+      ],
+    });
+  }
+  for (const reviewAgent of profile?.reviewAgents || []) {
+    const title = humanize(reviewAgent);
+    const key = normalize(title);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    agents.push({
+      title,
+      role: reviewAgent,
+      domain: 'review',
+      notes: [
+        'Review the training block for proof, consistency, and missing guardrails.',
+        'Block on drift between the structured profile and the human-facing docs.',
+      ],
+    });
+  }
+  return agents;
+}
+
+function buildTrainingLesson(mode, hostName, source, agents, profile) {
+  if (mode === 'error') {
+    return `Prevention rule: keep ${hostName} change lessons local until the baseline, regression matrix, and owned domains are complete for ${profile?.name || 'the active profile'}.`;
+  }
+  if (mode === 'replay') {
+    return `Replay lesson: reuse the latest durable lesson without duplicating the training sync block for ${hostName}.`;
+  }
+  if (mode === 'review') {
+    return `Review lesson: keep ${hostName} training aligned with the active profile memory and the latest gate outcome.`;
+  }
+  if (mode === 'promote') {
+    return `Promotion rule: move only durable lessons into ${hostName} host memory after the training block has been proven idempotent.`;
+  }
+  if (mode === 'sync') {
+    return `Sync lesson: keep the training block idempotent across AGENTS.md, profile memory, and host memory for ${hostName}.`;
+  }
+  const visibleAgents = agents.slice(0, 4).map((agent) => agent.title).join(', ');
+  const sourceMode = source?.mode || 'fresh';
+  return `Training lesson: keep ${visibleAgents || 'the active agents'} aligned with the active profile, preserve the owned domains, and mirror durable notes into ${hostName} memory. Source mode: ${sourceMode}.`;
+}
+
+function syncTrainingArtifacts(workspace, report) {
+  const rootBlock = renderTrainingSyncBlock(report, 'docs');
+  const memoryBlock = renderTrainingSyncBlock(report, 'memory');
+  const targets = [
+    workspace.repoRoot && path.join(workspace.repoRoot, 'AGENTS.md'),
+    workspace.profileDocPath,
+    workspace.profile?.memory?.profileMemory ? path.join(workspace.repoRoot, workspace.profile.memory.profileMemory) : path.join(workspace.repoRoot, 'memory/profile/imphub.md'),
+    resolveHostMemoryPath(workspace.repoRoot, report.activeHost, 'host'),
+  ].filter(Boolean);
+
+  for (const filePath of targets) {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    const current = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '';
+    const block = filePath.includes(`${path.sep}memory${path.sep}`) ? memoryBlock : rootBlock;
+    fs.writeFileSync(filePath, replaceMarkedBlock(current, 'agent-system-training-start', 'agent-system-training-end', block), 'utf8');
+  }
+
+  fs.mkdirSync(workspace.trainingDir, { recursive: true });
+  fs.writeFileSync(report.summaryPath, renderTrainingSummaryDoc(report), 'utf8');
+}
+
+function renderTrainingSyncBlock(report, scope) {
+  const title = scope === 'memory' ? 'Agent Training Sync' : 'Training Sync';
+  const lines = [];
+  lines.push('<!-- agent-system-training-start -->');
+  lines.push(`## ${title}`);
+  lines.push('');
+  lines.push(`Generated: ${report.generatedAt}`);
+  lines.push(`Profile: ${report.activeProfile}`);
+  lines.push(`Host focus: ${report.activeHost}`);
+  lines.push(`Mode: ${report.mode}`);
+  lines.push(`Outcome: ${report.outcome}`);
+  lines.push(`Agents trained: ${report.agents.length}`);
+  lines.push('');
+  for (const agent of report.agents) {
+    lines.push(`### ${agent.title}`);
+    lines.push(`- Role: ${agent.role}`);
+    lines.push(`- Domain: ${agent.domain}`);
+    for (const note of agent.notes) {
+      lines.push(`- ${note}`);
+    }
+    lines.push('');
+  }
+  lines.push('### Learning Rule');
+  lines.push(`- ${report.lesson}`);
+  lines.push('');
+  lines.push('### Host Sync');
+  lines.push(`- ${report.activeHost}: training lessons and memory are synchronized from this pass.`);
+  lines.push('<!-- agent-system-training-end -->');
+  return lines.join('\n').trimEnd() + '\n';
+}
+
+function renderTrainingSummaryDoc(report) {
+  const lines = [];
+  lines.push('# Training Run');
+  lines.push('');
+  lines.push(`- Session: ${report.sessionId}`);
+  lines.push(`- Mode: ${report.mode}`);
+  lines.push(`- Outcome: ${report.outcome}`);
+  lines.push(`- Profile: ${report.activeProfile}`);
+  lines.push(`- Host: ${report.activeHost}`);
+  lines.push(`- Agents trained: ${report.agents.length}`);
+  lines.push('');
+  lines.push('## Lesson');
+  lines.push('');
+  lines.push(`- ${report.lesson}`);
+  lines.push('');
+  lines.push('## Agents');
+  lines.push('');
+  for (const agent of report.agents) {
+    lines.push(`### ${agent.title}`);
+    lines.push(`- Role: ${agent.role}`);
+    lines.push(`- Domain: ${agent.domain}`);
+    for (const note of agent.notes) {
+      lines.push(`- ${note}`);
+    }
+    lines.push('');
+  }
+  return lines.join('\n').trimEnd() + '\n';
+}
+
+function captureTrainingMemory(workspace, report) {
+  const changePath = resolveHostMemoryPath(workspace.repoRoot, report.activeHost, 'change');
+  ensureMemoryChangeFile(workspace.repoRoot, report.activeHost);
+  const line = report.mode === 'error'
+    ? `Prevention rule: ${report.lesson}`
+    : `Training lesson: ${report.lesson}`;
+  appendMemoryEntry(changePath, line);
+}
+
+function writeTrainingRecord(workspace, report) {
+  const current = {
+    kind: report.kind,
+    version: report.version,
+    mode: report.mode,
+    outcome: report.outcome,
+    activeProfile: report.activeProfile,
+    activeHost: report.activeHost,
+    sessionId: report.sessionId,
+    generatedAt: report.generatedAt,
+    summaryPath: path.relative(workspace.repoRoot, report.summaryPath),
+    agents: report.agents.map((agent) => ({
+      title: agent.title,
+      role: agent.role,
+      domain: agent.domain,
+    })),
+    lesson: report.lesson,
+  };
+  fs.mkdirSync(path.dirname(workspace.trainingCurrentPath), { recursive: true });
+  fs.writeFileSync(workspace.trainingCurrentPath, JSON.stringify(current, null, 2) + '\n', 'utf8');
+
+  const history = readTrainingHistory(workspace);
+  const historyEntry = {
+    ...current,
+    eventType: report.mode,
+    recordedAt: report.generatedAt,
+    sequence: history.length + 1,
+  };
+  fs.mkdirSync(path.dirname(workspace.trainingHistoryPath), { recursive: true });
+  fs.appendFileSync(workspace.trainingHistoryPath, JSON.stringify(historyEntry) + '\n', 'utf8');
+}
+
+function readTrainingCurrent(workspace) {
+  if (!fs.existsSync(workspace.trainingCurrentPath)) {
+    return {
+      kind: 'agent-system-training',
+      version: 1,
+      mode: 'idle',
+      outcome: 'idle',
+      activeProfile: workspace.activeProfileName,
+      activeHost: workspace.activeHostName,
+      sessionId: '',
+      generatedAt: '',
+      summaryPath: '',
+      agents: [],
+      lesson: '',
+    };
+  }
+  try {
+    return readJson(workspace.trainingCurrentPath);
+  } catch {
+    return {
+      kind: 'agent-system-training',
+      version: 1,
+      mode: 'idle',
+      outcome: 'idle',
+      activeProfile: workspace.activeProfileName,
+      activeHost: workspace.activeHostName,
+      sessionId: '',
+      generatedAt: '',
+      summaryPath: '',
+      agents: [],
+      lesson: '',
+    };
+  }
+}
+
+function readTrainingHistory(workspace) {
+  if (!fs.existsSync(workspace.trainingHistoryPath)) {
+    return [];
+  }
+  const entries = [];
+  const lines = fs.readFileSync(workspace.trainingHistoryPath, 'utf8').split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      entries.push(JSON.parse(trimmed));
+    } catch {
+      continue;
+    }
+  }
+  return entries;
+}
+
+function replaceMarkedBlock(sourceText, startMarker, endMarker, block) {
+  const startToken = `<!-- ${startMarker} -->`;
+  const endToken = `<!-- ${endMarker} -->`;
+  const existingStart = sourceText.indexOf(startToken);
+  const existingEnd = sourceText.indexOf(endToken);
+  const nextBlock = String(block || '').trimEnd();
+  if (existingStart !== -1 && existingEnd !== -1 && existingEnd > existingStart) {
+    const before = sourceText.slice(0, existingStart).trimEnd();
+    const after = sourceText.slice(existingEnd + endToken.length).trimStart();
+    return [before, nextBlock, after].filter(Boolean).join('\n\n').trimEnd() + '\n';
+  }
+  const current = String(sourceText || '').trimEnd();
+  if (!current) {
+    return `${nextBlock}\n`;
+  }
+  return `${current}\n\n${nextBlock}\n`;
+}
+
 function buildUpgradeReport(workspace, sourceText, targetPath, activeHost) {
   const parsedSections = parseUpgradeAgentSections(sourceText);
   const sourceSections = parsedSections.length > 0 ? parsedSections : inferProfileUpgradeAgents(workspace.profile);
@@ -1621,6 +1956,10 @@ function buildLintReport(workspace) {
     ['change readme exists', () => fs.existsSync(workspace.changeReadmePath)],
     ['change template exists', () => fs.existsSync(workspace.changeTemplatePath)],
     ['change memory exists', () => fs.existsSync(workspace.changeMemoryPath) || hasAnyChangeMemoryFile(workspace.repoRoot)],
+    ['training snapshot exists', () => fs.existsSync(workspace.trainingCurrentPath)],
+    ['training history exists', () => fs.existsSync(workspace.trainingHistoryPath)],
+    ['training readme exists', () => fs.existsSync(workspace.trainingReadmePath)],
+    ['training schema exists', () => fs.existsSync(workspace.trainingSchemaPath)],
     ['command script exists', () => fs.existsSync(path.join(workspace.repoRoot, 'bin', 'agent-system.mjs'))],
     ['memory audit clean', () => auditMemory(workspace.repoRoot, workspace.manifest, workspace.profile, workspace.activeHostName).ok],
   ];

@@ -52,9 +52,11 @@ Durable rules should be written where they belong first, then kept inside the ho
 - `change memory-suggest` proposes durable lessons to promote from change memory.
 - `quick-update` prepares a ready-to-review update intake from target and intent without requiring `git diff`.
 - `upgrade` applies multi-agent instruction upgrades and syncs the resulting memory into the active profile and all supported host memories.
+- `docs/training/current.json`, `docs/training/history.jsonl`, and `docs/training/<session>.md` record the automatic training loop.
+- `train`, `train error`, `train review`, `train replay`, `train promote`, and `train sync` train several agents at once, sync the active host memory, and write an auditable lesson trail.
 - `memory/change/<host>.md` stores auto-captured lessons from change gates before promotion into that same host's memory file.
 - `memory learn` auto-promotes repeated change lessons into the active host's memory file during a successful gate.
 
-## V0.5.2 intent
+## V0.5.2.5 intent
 
-This release adds portable recovery, quick update entry points, and multi-agent upgrade syncing on top of the routing and memory scaffold: the repo can snapshot the mutable workspace, validate the bundle, prune duplicate noise, restore the state back into a clean checkout, prepare a fast update intake from just target plus intent, and apply direct instruction upgrades across several agents while keeping host memory aligned.
+This release adds portable recovery, quick update entry points, multi-agent upgrade syncing, and the new automatic training loop on top of the routing and memory scaffold: the repo can snapshot the mutable workspace, validate the bundle, prune duplicate noise, restore the state back into a clean checkout, prepare a fast update intake from just target plus intent, apply direct instruction upgrades across several agents, and train those agents directly into the active host and profile memory without duplicating the sync block.

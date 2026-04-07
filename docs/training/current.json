@@ -1,0 +1,14 @@
+{
+  "kind": "agent-system-training",
+  "version": 1,
+  "mode": "idle",
+  "outcome": "idle",
+  "activeProfile": "imphub",
+  "activeHost": "qwen",
+  "sessionId": "",
+  "generatedAt": "",
+  "summaryPath": "",
+  "agents": [],
+  "lesson": ""
+}
+

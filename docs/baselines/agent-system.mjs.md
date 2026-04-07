@@ -8,14 +8,15 @@
 
 ## Current Baseline Notes
 
-- `validate` checks the active profile, status files, change files, backup schema, quick-update flow, upgrade flow, and host memory layout.
-- `lint` enforces manifest consistency, memory drift checks, status presence, change presence, pack presence, backup schema presence, quick-update coverage, and upgrade coverage.
+- `validate` checks the active profile, status files, change files, training logs, backup schema, quick-update flow, upgrade flow, and host memory layout.
+- `lint` enforces manifest consistency, memory drift checks, status presence, change presence, pack presence, training presence, backup schema presence, quick-update coverage, upgrade coverage, and training coverage.
 - `status` owns presence, heartbeat, and session attachment.
 - `memory` owns review, compress, teach, gate, reflect, and learning pack generation per host.
 - `change` owns intake analysis, scaffold generation, preview/apply, rollback, and gate validation.
 - `backup`, `restore`, and `bundle` own portable snapshot capture, validation, diffing, and pruning.
 - `quick-update` owns fast update intake preparation from target and intent without git-diff dependence.
 - `upgrade` owns multi-agent instruction upgrades plus profile and host memory synchronization.
+- `train` owns multi-agent training sync, durable lesson capture, and the append-only training log.
 
 ## Verification Targets
 
@@ -26,3 +27,4 @@
 - `node --test tests/backup-restore-cli.test.mjs`
 - `node --test tests/quick-update-cli.test.mjs`
 - `node --test tests/upgrade-cli.test.mjs`
+- `node --test tests/train-cli.test.mjs`
