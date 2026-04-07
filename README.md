@@ -58,9 +58,9 @@ Short form:
 qwen extensions install Nanana291/agent-system
 ```
 
-## V0.4.1 scope
+## V0.4.2 scope
 
-This release adds a universal status bus for live agent presence, plus watchable status rendering for terminal workflows. It is still not a full autonomous dispatcher.
+This release adds session-level status commands on top of the universal presence bus: `heartbeat`, `who`, and `attach`. The bus now works as a live presence layer and a lightweight session binder for terminal workflows.
 
 ## Memory layer
 
@@ -92,7 +92,10 @@ node ./bin/agent-system.mjs memory prune
 node ./bin/agent-system.mjs memory audit
 node ./bin/agent-system.mjs memory stats
 node ./bin/agent-system.mjs status show
+node ./bin/agent-system.mjs status who
 node ./bin/agent-system.mjs status set --agent ghost --name Ghost --action "Waiting for ghost to finish auto farm" --state working --scope farm-loop --eta 08:00
+node ./bin/agent-system.mjs status heartbeat
+node ./bin/agent-system.mjs status attach --agent ghost --task "memory audit" --route "memory -> audit"
 node ./bin/agent-system.mjs status clear
 node ./bin/agent-system.mjs status watch --interval 2
 node ./bin/agent-system.mjs status list --limit 10

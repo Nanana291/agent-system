@@ -1,12 +1,17 @@
 {
-  "agent": "ghost",
-  "name": "Ghost",
-  "action": "Waiting for ghost to finish auto farm",
-  "state": "working",
-  "scope": "farm-loop",
-  "startedAt": "2026-04-07T11:30:57.417Z",
-  "updatedAt": "2026-04-07T11:30:57.421Z",
-  "eta": "08:00",
+  "agent": null,
+  "name": "Idle",
+  "action": "No active agent",
+  "state": "idle",
+  "scope": "none",
+  "task": null,
+  "route": null,
+  "profile": null,
+  "attachedAt": null,
+  "heartbeatAt": null,
+  "startedAt": null,
+  "updatedAt": null,
+  "eta": null,
   "detail": "",
-  "active": true
+  "active": false
 }

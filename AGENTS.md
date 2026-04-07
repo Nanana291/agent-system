@@ -41,6 +41,7 @@ Durable rules should be written where they belong first, then mirrored outward o
 - `status/current.json` stores the active agent presence snapshot.
 - `status/events.jsonl` stores append-only presence events.
 - `status watch` renders live presence lines for terminal use.
+- `status heartbeat`, `status who`, and `status attach` extend the presence layer into a simple session tracker.
 - The canonical human-facing format is `[AGENT] <name> | <action> | <elapsed>`.
 
 ## V0.1 intent

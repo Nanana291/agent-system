@@ -11,6 +11,11 @@ Fields:
 - `action`
 - `state`
 - `scope`
+- `task`
+- `route`
+- `profile`
+- `attachedAt`
+- `heartbeatAt`
 - `startedAt`
 - `updatedAt`
 - `eta`
@@ -33,6 +38,9 @@ The canonical terminal line is:
 Helpful extras:
 
 - scope
+- task
+- route
+- profile
 - eta
 - state
 

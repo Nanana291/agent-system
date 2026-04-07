@@ -128,6 +128,16 @@ function parseArgs(argv) {
       i += 1;
       continue;
     }
+    if (arg === '--task') {
+      flags.task = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--route') {
+      flags.route = argv[i + 1];
+      i += 1;
+      continue;
+    }
     if (arg === '--state') {
       flags.state = argv[i + 1];
       i += 1;
@@ -185,7 +195,10 @@ function printHelp() {
     '    stats    Show memory file counts and entry counts',
     '  status     Read or update live agent presence',
     '    show     Print the current presence snapshot',
+    '    who      Print the active session summary',
     '    set      Update the current presence snapshot',
+    '    heartbeat Refresh the current snapshot timestamp',
+    '    attach   Bind the snapshot to a task and route',
     '    clear    Mark the current presence as inactive',
     '    list     Print recent presence events',
     '    watch    Render the current snapshot continuously',
@@ -197,6 +210,8 @@ function printHelp() {
     '  --agent <id>      Set the status agent id',
     '  --name <text>     Set the human-facing agent name',
     '  --action <text>   Set the current action text',
+    '  --task <text>     Set the attached task label',
+    '  --route <text>    Set the attached route label',
     '  --state <text>    Set the current state label',
     '  --scope <text>    Set the current scope label',
     '  --eta <text>      Set the current ETA text',
@@ -520,9 +535,28 @@ async function handleStatus(workspace, flags, positional) {
     case 'show':
       console.log(renderStatusLine(readStatusCurrent(workspace)));
       return;
+    case 'who':
+      console.log(renderStatusLine(readStatusCurrent(workspace)));
+      return;
     case 'set': {
       const snapshot = buildStatusSnapshot(workspace, flags, readStatusCurrent(workspace));
       writeStatusRecord(workspace, snapshot, 'set');
+      console.log(renderStatusLine(snapshot));
+      return;
+    }
+    case 'heartbeat': {
+      const snapshot = buildHeartbeatSnapshot(readStatusCurrent(workspace));
+      writeStatusRecord(workspace, snapshot, 'heartbeat');
+      console.log(renderStatusLine(snapshot));
+      return;
+    }
+    case 'attach': {
+      if (!flags.task || !flags.route) {
+        console.error('Usage: agent-system status attach --agent <id> --task <text> --route <text>');
+        process.exit(1);
+      }
+      const snapshot = buildAttachSnapshot(workspace, flags, readStatusCurrent(workspace));
+      writeStatusRecord(workspace, snapshot, 'attach');
       console.log(renderStatusLine(snapshot));
       return;
     }
@@ -894,6 +928,52 @@ function appendMemoryEntry(filePath, text) {
   fs.writeFileSync(filePath, next, 'utf8');
 }
 
+function buildHeartbeatSnapshot(current) {
+  const now = new Date().toISOString();
+  return {
+    ...current,
+    updatedAt: now,
+    heartbeatAt: now,
+  };
+}
+
+function buildAttachSnapshot(workspace, flags, current) {
+  const now = new Date().toISOString();
+  const currentSnapshot = current || createIdleStatusSnapshot();
+  const agent = flags.agent || currentSnapshot.agent || normalizeAgentName(flags.name || flags.task || flags.route || 'agent');
+  const name = flags.name || (flags.agent ? humanizeAgentName(flags.agent) : currentSnapshot.name || humanizeAgentName(agent));
+  const task = flags.task || currentSnapshot.task || '';
+  const route = flags.route || currentSnapshot.route || '';
+  const action = flags.action || `Attached to ${task}`;
+  const currentScope = currentSnapshot.scope && currentSnapshot.scope !== 'none' ? currentSnapshot.scope : '';
+  const scope = flags.scope || currentScope || inferScopeFromRoute(route) || inferScopeFromAgent(agent);
+  const state = flags.state || 'working';
+  const profile = workspace.activeProfileName;
+  const active = true;
+  const startedAt = currentSnapshot.active && currentSnapshot.agent === agent && currentSnapshot.scope === scope && currentSnapshot.startedAt
+    ? currentSnapshot.startedAt
+    : now;
+
+  return {
+    ...currentSnapshot,
+    agent,
+    name,
+    action,
+    state,
+    scope,
+    task,
+    route,
+    profile,
+    attachedAt: currentSnapshot.attachedAt || now,
+    heartbeatAt: currentSnapshot.heartbeatAt || null,
+    startedAt,
+    updatedAt: now,
+    eta: flags.eta || currentSnapshot.eta || null,
+    detail: flags.detail || currentSnapshot.detail || '',
+    active,
+  };
+}
+
 function readStatusCurrent(workspace) {
   const filePath = workspace.statusCurrentPath;
   if (!fs.existsSync(filePath)) {
@@ -952,8 +1032,8 @@ function writeStatusRecord(workspace, snapshot, eventType) {
 function buildStatusSnapshot(workspace, flags, current) {
   const now = new Date().toISOString();
   const currentSnapshot = current || createIdleStatusSnapshot();
-  const hasIntent = Boolean(flags.agent || flags.name || flags.action || flags.state || flags.scope || flags.eta || flags.detail);
-  const agent = flags.agent || (currentSnapshot.active ? currentSnapshot.agent : null) || normalizeAgentName(flags.name || currentSnapshot.name || currentSnapshot.scope || 'agent');
+  const hasIntent = Boolean(flags.agent || flags.name || flags.action || flags.state || flags.scope || flags.eta || flags.detail || flags.task || flags.route);
+  const agent = flags.agent || (currentSnapshot.active ? currentSnapshot.agent : null) || normalizeAgentName(flags.name || currentSnapshot.name || currentSnapshot.scope || flags.task || 'agent');
   const name = flags.name || (flags.agent ? humanizeAgentName(flags.agent) : currentSnapshot.active ? currentSnapshot.name : humanizeAgentName(agent));
   const scope = flags.scope || (currentSnapshot.active && currentSnapshot.agent === agent ? currentSnapshot.scope : inferScopeFromAgent(agent));
   const state = flags.state || (hasIntent ? 'working' : currentSnapshot.state || 'idle');
@@ -969,6 +1049,11 @@ function buildStatusSnapshot(workspace, flags, current) {
     action,
     state,
     scope,
+    task: flags.task || currentSnapshot.task || null,
+    route: flags.route || currentSnapshot.route || null,
+    profile: currentSnapshot.profile || workspace.activeProfileName,
+    attachedAt: currentSnapshot.attachedAt || null,
+    heartbeatAt: currentSnapshot.heartbeatAt || null,
     startedAt,
     updatedAt: now,
     eta: flags.eta || currentSnapshot.eta || null,
@@ -984,6 +1069,11 @@ function createIdleStatusSnapshot() {
     action: 'No active agent',
     state: 'idle',
     scope: 'none',
+    task: null,
+    route: null,
+    profile: null,
+    attachedAt: null,
+    heartbeatAt: null,
     startedAt: null,
     updatedAt: null,
     eta: null,
@@ -1001,6 +1091,15 @@ function renderStatusLine(status, referenceTime = status.updatedAt || status.sta
   ];
   if (status.scope && status.scope !== 'none') {
     parts.push(`scope=${status.scope}`);
+  }
+  if (status.task) {
+    parts.push(`task=${status.task}`);
+  }
+  if (status.route) {
+    parts.push(`route=${status.route}`);
+  }
+  if (status.profile) {
+    parts.push(`profile=${status.profile}`);
   }
   if (status.eta) {
     parts.push(`eta=${status.eta}`);
@@ -1071,6 +1170,23 @@ function inferScopeFromAgent(agent) {
     return 'watch';
   }
   return 'general';
+}
+
+function inferScopeFromRoute(route) {
+  const normalized = String(route || '').trim().toLowerCase();
+  if (!normalized) {
+    return '';
+  }
+  if (normalized.includes('audit')) {
+    return 'audit';
+  }
+  if (normalized.includes('farm')) {
+    return 'farm-loop';
+  }
+  if (normalized.includes('route')) {
+    return 'route-sync';
+  }
+  return '';
 }
 
 async function watchStatus(workspace, flags) {

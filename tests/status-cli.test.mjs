@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
+import { setTimeout as delay } from 'node:timers/promises';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const cli = path.join(repoRoot, 'bin', 'agent-system.mjs');
@@ -28,6 +29,11 @@ function createWorkspace() {
       action: 'No active agent',
       state: 'idle',
       scope: 'none',
+      task: null,
+      route: null,
+      profile: null,
+      attachedAt: null,
+      heartbeatAt: null,
       startedAt: null,
       updatedAt: null,
       eta: null,
@@ -140,6 +146,85 @@ test('status set infers a readable name from the agent id', () => {
     const current = JSON.parse(readFileSync(path.join(workspace, 'status', 'current.json'), 'utf8'));
     assert.equal(current.name, 'Ghost');
     assert.equal(current.agent, 'ghost');
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('status heartbeat refreshes the snapshot without changing the message', async () => {
+  const workspace = createWorkspace();
+  try {
+    const setResult = runStatus([
+      'set',
+      '--agent', 'ghost',
+      '--action', 'Waiting for ghost to finish auto farm',
+      '--state', 'working',
+      '--scope', 'farm-loop',
+    ], workspace);
+
+    assert.equal(setResult.status, 0, setResult.stderr);
+    const before = JSON.parse(readFileSync(path.join(workspace, 'status', 'current.json'), 'utf8'));
+
+    await delay(10);
+    const heartbeatResult = runStatus(['heartbeat'], workspace);
+    assert.equal(heartbeatResult.status, 0, heartbeatResult.stderr);
+    assert.match(heartbeatResult.stdout, /\[AGENT\]\s+Ghost\s+\|\s+Waiting for ghost to finish auto farm/);
+
+    const current = JSON.parse(readFileSync(path.join(workspace, 'status', 'current.json'), 'utf8'));
+    assert.equal(current.agent, 'ghost');
+    assert.equal(current.action, before.action);
+    assert.equal(current.heartbeatAt !== null, true);
+    assert.equal(current.updatedAt !== before.updatedAt, true);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('status attach binds a task route and profile to the current session', () => {
+  const workspace = createWorkspace();
+  try {
+    const result = runStatus([
+      'attach',
+      '--agent', 'ghost',
+      '--task', 'memory audit',
+      '--route', 'memory -> audit',
+    ], workspace);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /\[AGENT\]\s+Ghost\s+\|\s+Attached to memory audit/);
+    assert.match(result.stdout, /task=memory audit/);
+    assert.match(result.stdout, /route=memory -> audit/);
+
+    const current = JSON.parse(readFileSync(path.join(workspace, 'status', 'current.json'), 'utf8'));
+    assert.equal(current.agent, 'ghost');
+    assert.equal(current.task, 'memory audit');
+    assert.equal(current.route, 'memory -> audit');
+    assert.equal(current.profile, 'imphub');
+    assert.equal(current.scope, 'audit');
+    assert.equal(current.active, true);
+    assert.ok(current.attachedAt);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('status who reports the active session summary', () => {
+  const workspace = createWorkspace();
+  try {
+    const attachResult = runStatus([
+      'attach',
+      '--agent', 'ghost',
+      '--task', 'route sync',
+      '--route', 'status -> watch',
+    ], workspace);
+
+    assert.equal(attachResult.status, 0, attachResult.stderr);
+
+    const whoResult = runStatus(['who'], workspace);
+    assert.equal(whoResult.status, 0, whoResult.stderr);
+    assert.match(whoResult.stdout, /\[AGENT\]\s+Ghost\s+\|\s+Attached to route sync/);
+    assert.match(whoResult.stdout, /task=route sync/);
+    assert.match(whoResult.stdout, /route=status -> watch/);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }
