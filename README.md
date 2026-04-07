@@ -67,9 +67,9 @@ Short form:
 qwen extensions install Nanana291/agent-system
 ```
 
-## V0.4.6 scope
+## V0.4.6.5 scope
 
-This release adds host-scoped memory learning to the universal change workflow. It can scout repo changes from git status, auto-scaffold an intake, preview gate readiness, apply or roll back a change snapshot, and auto-promote repeated lessons into the active host's own memory file during a successful gate.
+This release adds a host memory refinement loop on top of host-scoped learning. The change workflow still scouts repo changes, auto-scaffolds an intake, previews gate readiness, applies or rolls back a change snapshot, and auto-promotes repeated lessons into the active host's memory file. The refinement layer now reviews, compresses, teaches, reflects, and packages host lessons without crossing host boundaries.
 
 ## Memory layer
 
@@ -100,6 +100,13 @@ node ./bin/agent-system.mjs memory prune
 node ./bin/agent-system.mjs memory audit
 node ./bin/agent-system.mjs memory stats
 node ./bin/agent-system.mjs memory learn --host qwen --apply
+node ./bin/agent-system.mjs memory review --host qwen
+node ./bin/agent-system.mjs memory compress --host qwen
+node ./bin/agent-system.mjs memory teach --host qwen
+node ./bin/agent-system.mjs memory gate --host qwen
+node ./bin/agent-system.mjs memory reflect --host qwen
+node ./bin/agent-system.mjs memory packs generate --host qwen
+node ./bin/agent-system.mjs memory packs list --host qwen
 node ./bin/agent-system.mjs status show
 node ./bin/agent-system.mjs status who
 node ./bin/agent-system.mjs status set --agent ghost --name Ghost --action "Waiting for ghost to finish auto farm" --state working --scope farm-loop --eta 08:00

@@ -269,6 +269,12 @@ function printHelp() {
     '    audit    Check memory drift and scope conflicts',
     '    stats    Show memory file counts and entry counts',
     '    capture  Capture a change memory note automatically',
+    '    review   Review host memory quality and repetition',
+    '    compress Compress repeated host lessons into stable rules',
+    '    teach    Promote durable host lessons into memory',
+    '    gate     Validate host-local memory readiness',
+    '    reflect  Capture a host reflection note',
+    '    packs    Generate or list host learning packs',
     '    suggest  Propose memory promotions from change lessons',
     '    learn    Auto-promote repeated lessons into higher memory scopes',
     '  status     Read or update live agent presence',
@@ -335,6 +341,7 @@ function loadWorkspace(profileName, hostName) {
   const changeTemplatePath = path.join(repoRoot, manifest.change?.intakeTemplate || 'templates/change-intake.md');
   const changeMemoryPath = resolveHostMemoryPath(repoRoot, activeHostName, 'change');
   const hostMemoryPath = resolveHostMemoryPath(repoRoot, activeHostName, 'host');
+  const packMemoryPath = resolveHostMemoryPath(repoRoot, activeHostName, 'packs');
   const profile = fs.existsSync(profilePath) ? readJson(profilePath) : null;
 
   return {
@@ -356,6 +363,7 @@ function loadWorkspace(profileName, hostName) {
     changeTemplatePath,
     changeMemoryPath,
     hostMemoryPath,
+    packMemoryPath,
     activeHostName,
     profile,
   };
@@ -376,6 +384,9 @@ function resolveHostMemoryPath(repoRoot, hostName, scope) {
   }
   if (scope === 'change') {
     return path.join(repoRoot, 'memory', 'change', `${normalizedHost}.md`);
+  }
+  if (scope === 'packs') {
+    return path.join(repoRoot, 'memory', 'packs', `${normalizedHost}.md`);
   }
   return path.join(repoRoot, 'memory', 'host', `${normalizedHost}.md`);
 }
@@ -420,6 +431,12 @@ function handleValidate(workspace) {
   for (const file of Object.values(manifest.bootstrap?.hostDocs || {})) {
     if (!fs.existsSync(path.join(repoRoot, file))) {
       issues.push(`missing host doc: ${file}`);
+    }
+  }
+
+  for (const file of Object.values(manifest.memory?.host || {})) {
+    if (!fs.existsSync(path.join(repoRoot, file))) {
+      issues.push(`missing host memory file: ${file}`);
     }
   }
 
@@ -584,7 +601,7 @@ function handleInit(workspace, positional) {
 function handleMemory(workspace, flags, positional) {
   const action = positional[0];
   if (!action) {
-    console.error('Usage: agent-system memory <list|add|search|promote|prune|audit|stats|capture|learn> ...');
+    console.error('Usage: agent-system memory <list|add|search|promote|prune|audit|stats|capture|review|compress|teach|gate|reflect|packs|learn> ...');
     process.exit(1);
   }
 
@@ -634,6 +651,36 @@ function handleMemory(workspace, flags, positional) {
 
   if (action === 'capture') {
     handleMemoryCapture(workspace, positional.slice(1));
+    return;
+  }
+
+  if (action === 'review') {
+    handleMemoryReview(workspace, flags);
+    return;
+  }
+
+  if (action === 'compress') {
+    handleMemoryCompress(workspace, flags);
+    return;
+  }
+
+  if (action === 'teach') {
+    handleMemoryTeach(workspace, flags);
+    return;
+  }
+
+  if (action === 'gate') {
+    handleMemoryGate(workspace, flags);
+    return;
+  }
+
+  if (action === 'reflect') {
+    handleMemoryReflect(workspace, flags);
+    return;
+  }
+
+  if (action === 'packs') {
+    handleLearningPacks(workspace, flags, positional.slice(1));
     return;
   }
 
@@ -699,7 +746,73 @@ function handleMemoryStats(workspace) {
   const stats = memoryStats(workspace.repoRoot);
   console.log(`Files: ${stats.files}`);
   console.log(`Entries: ${stats.entries}`);
-  console.log(`Scopes: host=${stats.host}, change=${stats.change}`);
+  console.log(`Scopes: host=${stats.host}, change=${stats.change}, packs=${stats.packs}`);
+}
+
+function handleMemoryReview(workspace, flags) {
+  const hostName = normalizeHostName(flags.host || workspace.activeHostName);
+  const report = reviewHostMemory(workspace.repoRoot, hostName);
+  console.log('[MEMORY REVIEW]');
+  console.log(`Host: ${hostName}`);
+  console.log(`Weak notes: ${report.weak}`);
+  console.log('Duplicate lessons:');
+  for (const line of report.duplicates) {
+    console.log(`- ${line}`);
+  }
+  console.log('Compression candidates:');
+  for (const line of report.candidates) {
+    console.log(`- ${line}`);
+  }
+}
+
+function handleMemoryCompress(workspace, flags) {
+  const hostName = normalizeHostName(flags.host || workspace.activeHostName);
+  const report = compressHostMemory(workspace.repoRoot, hostName);
+  console.log('[MEMORY COMPRESS]');
+  console.log(`Host: ${hostName}`);
+  console.log(`Wrote: ${path.relative(workspace.repoRoot, report.targetPath)}`);
+  console.log(`Compressed: ${report.compressed}`);
+}
+
+function handleMemoryTeach(workspace, flags) {
+  const hostName = normalizeHostName(flags.host || workspace.activeHostName);
+  const report = teachHostMemory(workspace.repoRoot, hostName);
+  console.log('[MEMORY TEACH]');
+  console.log(`Host: ${hostName}`);
+  console.log(`Wrote: ${path.relative(workspace.repoRoot, report.targetPath)}`);
+}
+
+function handleMemoryGate(workspace, flags) {
+  const hostName = normalizeHostName(flags.host || workspace.activeHostName);
+  const report = gateHostMemory(workspace.repoRoot, hostName);
+  console.log('[MEMORY GATE]');
+  console.log(`Host: ${hostName}`);
+  console.log(`Ready: ${report.ready ? 'yes' : 'no'}`);
+  console.log(`Reason: ${report.reason}`);
+}
+
+function handleMemoryReflect(workspace, flags) {
+  const hostName = normalizeHostName(flags.host || workspace.activeHostName);
+  const intake = readChangeCurrent(workspace);
+  const report = evaluateChangeGate(intake);
+  const reflection = recordHostReflection(workspace, intake, report, hostName);
+  console.log('[MEMORY REFLECT]');
+  console.log(`Host: ${hostName}`);
+  console.log(`Wrote: ${path.relative(workspace.repoRoot, reflection.targetPath)}`);
+}
+
+function handleLearningPacks(workspace, flags, positional) {
+  const hostName = normalizeHostName(flags.host || workspace.activeHostName);
+  const action = positional[0] || 'list';
+  const report = action === 'generate'
+    ? generateLearningPack(workspace.repoRoot, hostName)
+    : listLearningPack(workspace.repoRoot, hostName);
+  console.log('[LEARNING PACKS]');
+  console.log(`Host: ${hostName}`);
+  console.log(`Pack: ${path.relative(workspace.repoRoot, report.targetPath)}`);
+  if (action === 'generate') {
+    console.log('Generated: yes');
+  }
 }
 
 function handleMemoryLearn(workspace, flags) {
@@ -736,6 +849,151 @@ function handleMemoryCapture(workspace, positional) {
   const report = evaluateChangeGate(intake);
   captureChangeMemory(workspace, intake, report, workspace.activeHostName);
   console.log(`Captured change memory for ${intake.target || 'unknown target'}`);
+}
+
+function reviewHostMemory(repoRoot, hostName) {
+  const normalizedHost = normalizeHostName(hostName);
+  const changePath = resolveHostMemoryPath(repoRoot, normalizedHost, 'change');
+  const hostPath = resolveHostMemoryPath(repoRoot, normalizedHost, 'host');
+  const changeEntries = readMemoryBullets(changePath);
+  const hostEntries = readMemoryBullets(hostPath);
+  const hostSet = new Set(hostEntries.map((entry) => normalizeMemoryBullet(entry)));
+  const counts = new Map();
+  const duplicates = [];
+  const candidates = [];
+  let weak = 0;
+
+  for (const entry of changeEntries) {
+    const key = normalizeMemoryBullet(entry);
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+
+  for (const [key, count] of counts.entries()) {
+    const entry = changeEntries.find((line) => normalizeMemoryBullet(line) === key) || '';
+    const text = stripBulletPrefix(entry);
+    if (!text) {
+      weak += 1;
+      continue;
+    }
+    if (count > 1) {
+      duplicates.push(text);
+    }
+    if (count > 1 || !hostSet.has(key) || isUniversalMemoryRule(text)) {
+      candidates.push(text);
+    }
+    if (text.length < 20 || /maybe|todo|temp|unclear/i.test(text)) {
+      weak += 1;
+    }
+  }
+
+  return { weak, duplicates, candidates };
+}
+
+function compressHostMemory(repoRoot, hostName) {
+  const normalizedHost = normalizeHostName(hostName);
+  const changePath = resolveHostMemoryPath(repoRoot, normalizedHost, 'change');
+  const review = reviewHostMemory(repoRoot, normalizedHost);
+  const lessons = [];
+  const seen = new Set();
+
+  for (const line of review.candidates) {
+    const text = stripBulletPrefix(line);
+    const key = normalizeMemoryBullet(text);
+    if (!text || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    lessons.push(text);
+  }
+
+  fs.mkdirSync(path.dirname(changePath), { recursive: true });
+  const lines = [
+    `# ${humanize(normalizedHost)} Change Memory`,
+    '',
+    'Change-specific lessons captured from gates and reflections live here.',
+    '',
+    ...(lessons.length > 0 ? lessons.map((lesson) => `- ${lesson}`) : ['- No durable lessons recorded yet.']),
+    '',
+  ];
+  fs.writeFileSync(changePath, lines.join('\n'), 'utf8');
+  return { targetPath: changePath, compressed: lessons.length };
+}
+
+function teachHostMemory(repoRoot, hostName) {
+  const normalizedHost = normalizeHostName(hostName);
+  const hostPath = resolveHostMemoryPath(repoRoot, normalizedHost, 'host');
+  const review = reviewHostMemory(repoRoot, normalizedHost);
+  const current = readOptionalText(hostPath);
+  const lines = current.split(/\r?\n/).filter((line) => line.trim().length > 0);
+  const known = new Set(lines.map((line) => normalizeMemoryBullet(line)));
+
+  for (const line of review.candidates) {
+    const text = stripBulletPrefix(line);
+    const key = normalizeMemoryBullet(text);
+    if (!text || known.has(key)) {
+      continue;
+    }
+    lines.push(`- ${text}`);
+    known.add(key);
+  }
+
+  if (lines.length === 0) {
+    lines.push(`# ${humanize(normalizedHost)} Memory`);
+    lines.push('');
+    lines.push('- No durable lessons yet.');
+  }
+
+  fs.mkdirSync(path.dirname(hostPath), { recursive: true });
+  fs.writeFileSync(hostPath, `${lines.join('\n').trimEnd()}\n`, 'utf8');
+  return { targetPath: hostPath };
+}
+
+function gateHostMemory(repoRoot, hostName) {
+  const normalizedHost = normalizeHostName(hostName);
+  const review = reviewHostMemory(repoRoot, normalizedHost);
+  const ready = review.candidates.length > 0 && review.weak === 0;
+  return {
+    ready,
+    reason: ready ? 'host memory is compact and reusable' : 'host memory still has weak or uncompressed notes',
+  };
+}
+
+function recordHostReflection(workspace, intake, report, hostName) {
+  const normalizedHost = normalizeHostName(hostName || workspace.activeHostName);
+  const changePath = resolveHostMemoryPath(workspace.repoRoot, normalizedHost, 'change');
+  ensureMemoryChangeFile(workspace.repoRoot, normalizedHost);
+  const target = intake?.target || 'unknown target';
+  const type = intake?.type || 'unknown';
+  const status = report?.ready ? 'ready' : 'blocked';
+  const line = `Reflection for ${type} change targeting ${target}; status: ${status}; host: ${normalizedHost}.`;
+  appendMemoryEntry(changePath, line);
+  return { targetPath: changePath };
+}
+
+function generateLearningPack(repoRoot, hostName) {
+  const normalizedHost = normalizeHostName(hostName);
+  const hostPath = resolveHostMemoryPath(repoRoot, normalizedHost, 'host');
+  const packPath = resolveHostMemoryPath(repoRoot, normalizedHost, 'packs');
+  const hostEntries = readMemoryBullets(hostPath);
+  const lines = [
+    `# ${humanize(normalizedHost)} Learning Pack`,
+    '',
+    `Host memory: ${path.relative(repoRoot, hostPath)}`,
+    '',
+    '## Durable Lessons',
+    '',
+    ...(hostEntries.length > 0 ? hostEntries : ['- No durable lessons yet.']),
+    '',
+  ];
+  fs.mkdirSync(path.dirname(packPath), { recursive: true });
+  fs.writeFileSync(packPath, lines.join('\n'), 'utf8');
+  return { targetPath: packPath };
+}
+
+function listLearningPack(repoRoot, hostName) {
+  const normalizedHost = normalizeHostName(hostName);
+  const packPath = resolveHostMemoryPath(repoRoot, normalizedHost, 'packs');
+  return { targetPath: packPath };
 }
 
 async function handleChange(workspace, flags, positional) {
@@ -797,8 +1055,11 @@ async function handleChange(workspace, flags, positional) {
       const intake = readChangeCurrent(workspace);
       const report = evaluateChangeGate(intake);
       captureChangeMemory(workspace, intake, report, workspace.activeHostName);
+      recordHostReflection(workspace, intake, report, workspace.activeHostName);
       if (report.ready) {
         learnMemory(workspace.repoRoot, workspace.activeHostName, 2, true);
+        teachHostMemory(workspace.repoRoot, workspace.activeHostName);
+        generateLearningPack(workspace.repoRoot, workspace.activeHostName);
       }
       writeChangeRecord(workspace, {
         ...intake,
@@ -1011,6 +1272,7 @@ function buildExportBundle(workspace, profileName) {
   const profile = readJson(profilePath);
   const bundle = {
     exportedAt: new Date().toISOString(),
+    host: workspace.activeHostName,
     manifest: workspace.manifest,
     profile,
     profileDoc: fs.readFileSync(profileDocPath, 'utf8'),
@@ -1018,6 +1280,7 @@ function buildExportBundle(workspace, profileName) {
       system: readOptionalText(path.join(workspace.repoRoot, workspace.manifest.memory?.system || 'memory/system.md')),
       profile: readOptionalText(path.join(workspace.repoRoot, profile.memory?.profileMemory || `memory/profile/${profileName}.md`)),
       change: readOptionalText(workspace.changeMemoryPath),
+      packs: readOptionalText(workspace.packMemoryPath),
       host: {
         generic: readOptionalText(path.join(workspace.repoRoot, workspace.manifest.memory?.host?.generic || 'memory/host/generic.md')),
         claude: readOptionalText(path.join(workspace.repoRoot, workspace.manifest.memory?.host?.claude || 'memory/host/claude.md')),
@@ -1052,6 +1315,12 @@ function importBundle(repoRoot, bundle) {
     const changeMemoryPath = resolveHostMemoryPath(repoRoot, hostName, 'change');
     fs.mkdirSync(path.dirname(changeMemoryPath), { recursive: true });
     fs.writeFileSync(changeMemoryPath, bundle.memory.change, 'utf8');
+  }
+  if (bundle.memory?.packs) {
+    const hostName = normalizeHostName(bundle?.host || process.env.AGENT_SYSTEM_HOST || 'qwen');
+    const packMemoryPath = resolveHostMemoryPath(repoRoot, hostName, 'packs');
+    fs.mkdirSync(path.dirname(packMemoryPath), { recursive: true });
+    fs.writeFileSync(packMemoryPath, bundle.memory.packs, 'utf8');
   }
   if (bundle.memory?.system) {
     writeOptionalText(path.join(repoRoot, bundle.manifest?.memory?.system || 'memory/system.md'), bundle.memory.system);
@@ -1165,6 +1434,7 @@ function memoryStats(repoRoot) {
   let profile = 0;
   let host = 0;
   let change = 0;
+  let packs = 0;
   for (const file of files) {
     const relative = path.relative(repoRoot, file);
     const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
@@ -1173,8 +1443,9 @@ function memoryStats(repoRoot) {
     else if (relative.startsWith(`memory${path.sep}profile${path.sep}`)) profile += 1;
     else if (relative.startsWith(`memory${path.sep}host${path.sep}`)) host += 1;
     else if (relative.startsWith(`memory${path.sep}change${path.sep}`)) change += 1;
+    else if (relative.startsWith(`memory${path.sep}packs${path.sep}`)) packs += 1;
   }
-  return { files: files.length, entries, system, profile, host, change };
+  return { files: files.length, entries, system, profile, host, change, packs };
 }
 
 function cloneProfileTemplate(profile, nextName) {
@@ -1221,10 +1492,13 @@ function listMemoryFiles(repoRoot, target) {
     files.push(...walkFiles(path.join(repoRoot, 'memory', 'profile')).map((file) => path.relative(repoRoot, file)));
   } else if (target.startsWith('host')) {
     files.push(...walkFiles(path.join(repoRoot, 'memory', 'host')).map((file) => path.relative(repoRoot, file)));
+  } else if (target === 'packs') {
+    files.push(...walkFiles(path.join(repoRoot, 'memory', 'packs')).map((file) => path.relative(repoRoot, file)));
   } else {
     files.push('memory/system.md');
     files.push(...walkFiles(path.join(repoRoot, 'memory', 'profile')).map((file) => path.relative(repoRoot, file)));
     files.push(...walkFiles(path.join(repoRoot, 'memory', 'host')).map((file) => path.relative(repoRoot, file)));
+    files.push(...walkFiles(path.join(repoRoot, 'memory', 'packs')).map((file) => path.relative(repoRoot, file)));
   }
   return files;
 }
@@ -1235,6 +1509,10 @@ function resolveMemoryTarget(repoRoot, target) {
   if (target.startsWith('host:')) {
     const host = target.split(':')[1];
     return path.join(repoRoot, 'memory', 'host', `${host}.md`);
+  }
+  if (target.startsWith('packs:')) {
+    const host = target.split(':')[1];
+    return path.join(repoRoot, 'memory', 'packs', `${host}.md`);
   }
   return path.join(repoRoot, 'memory', 'system.md');
 }
@@ -1727,6 +2005,17 @@ function isUniversalMemoryRule(text) {
     return false;
   }
   return lowered.includes('superpowers') || lowered.includes('agent system') || lowered.includes('route') || lowered.includes('memory');
+}
+
+function isWeakMemoryRule(text) {
+  const lowered = String(text || '').toLowerCase().replace(/^\-\s+/, '').trim();
+  if (!lowered) {
+    return true;
+  }
+  if (lowered.length < 12) {
+    return true;
+  }
+  return /todo|maybe|temp|placeholder|unknown|fix later|not sure/.test(lowered);
 }
 
 function renderChangeIntakeDoc(intake, workspace) {

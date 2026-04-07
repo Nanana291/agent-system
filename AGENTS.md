@@ -30,8 +30,10 @@ Claude Code, Codex, and Qwen Code all read the same core contract. Each host has
 ## Memory contract
 
 - `memory/host/claude.md`, `memory/host/codex.md`, and `memory/host/qwen.md` store host-specific lessons.
+- `memory/packs/claude.md`, `memory/packs/codex.md`, and `memory/packs/qwen.md` store compact host learning packs.
 - The active host is the boundary for capture and promotion.
 - `memory/change/<host>.md` stores host-local change lessons before they are promoted into that same host's main memory file.
+- The host refinement loop uses `memory review`, `memory compress`, `memory teach`, `memory gate`, `memory reflect`, and `memory packs` to keep lessons compact before promotion.
 
 Durable rules should be written where they belong first, then kept inside the host that learned them.
 

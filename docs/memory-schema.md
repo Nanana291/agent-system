@@ -7,6 +7,9 @@ The memory layer is intentionally flat and host-scoped.
 - `memory/host/claude.md`
 - `memory/host/codex.md`
 - `memory/host/qwen.md`
+- `memory/packs/claude.md`
+- `memory/packs/codex.md`
+- `memory/packs/qwen.md`
 
 ## Write policy
 
@@ -27,6 +30,12 @@ When a mistake occurs:
 - `memory search` finds rules by text.
 - `memory promote` moves a rule inside the active host boundary.
 - `memory learn` auto-promotes repeated change lessons into the active host memory file.
+- `memory review` finds duplicates and weak notes for the active host.
+- `memory compress` rewrites the active host change memory into a compact host-local trail.
+- `memory teach` promotes compact host lessons into the active host memory file.
+- `memory gate` blocks weak notes from becoming durable host memory.
+- `memory reflect` appends a short host-local reflection note after a change gate.
+- `memory packs` generates or lists the compact host learning pack.
 - `memory prune` removes duplicate blank or repeated entries.
 - `memory audit` checks host drift and scope conflicts.
 - `memory stats` reports file and entry counts for the host memory tree.

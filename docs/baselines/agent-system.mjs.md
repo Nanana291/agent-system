@@ -8,10 +8,11 @@
 
 ## Current Baseline Notes
 
-- `validate` checks the active profile, status files, and change files.
-- `lint` enforces manifest consistency, memory drift checks, status presence, and change presence.
+- `validate` checks the active profile, status files, change files, and host memory layout.
+- `lint` enforces manifest consistency, memory drift checks, status presence, change presence, and pack presence.
 - `status` owns presence, heartbeat, and session attachment.
-- `change` owns intake analysis, scaffold generation, and gate validation.
+- `memory` owns review, compress, teach, gate, reflect, and learning pack generation per host.
+- `change` owns intake analysis, scaffold generation, preview/apply, rollback, and gate validation.
 
 ## Verification Targets
 
