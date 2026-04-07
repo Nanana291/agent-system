@@ -892,32 +892,31 @@ function reviewHostMemory(repoRoot, hostName) {
 function compressHostMemory(repoRoot, hostName) {
   const normalizedHost = normalizeHostName(hostName);
   const changePath = resolveHostMemoryPath(repoRoot, normalizedHost, 'change');
-  const hostPath = resolveHostMemoryPath(repoRoot, normalizedHost, 'host');
   const review = reviewHostMemory(repoRoot, normalizedHost);
-  const current = readOptionalText(hostPath);
-  const lines = current.split(/\r?\n/).filter((line) => line.trim().length > 0);
-  const known = new Set(lines.map((line) => normalizeMemoryBullet(line)));
-  let compressed = 0;
+  const lessons = [];
+  const seen = new Set();
 
   for (const line of review.candidates) {
     const text = stripBulletPrefix(line);
     const key = normalizeMemoryBullet(text);
-    if (!text || known.has(key)) {
+    if (!text || seen.has(key)) {
       continue;
     }
-    lines.push(`- ${text}`);
-    known.add(key);
-    compressed += 1;
+    seen.add(key);
+    lessons.push(text);
   }
 
-  const output = `${lines.join('\n').trimEnd()}\n`;
-  fs.mkdirSync(path.dirname(hostPath), { recursive: true });
-  fs.writeFileSync(hostPath, output, 'utf8');
-  ensureMemoryChangeFile(repoRoot, normalizedHost);
-  if (!fs.existsSync(changePath)) {
-    fs.writeFileSync(changePath, `# ${humanize(normalizedHost)} Change Memory\n\n`, 'utf8');
-  }
-  return { targetPath: hostPath, compressed };
+  fs.mkdirSync(path.dirname(changePath), { recursive: true });
+  const lines = [
+    `# ${humanize(normalizedHost)} Change Memory`,
+    '',
+    'Change-specific lessons captured from gates and reflections live here.',
+    '',
+    ...(lessons.length > 0 ? lessons.map((lesson) => `- ${lesson}`) : ['- No durable lessons recorded yet.']),
+    '',
+  ];
+  fs.writeFileSync(changePath, lines.join('\n'), 'utf8');
+  return { targetPath: changePath, compressed: lessons.length };
 }
 
 function teachHostMemory(repoRoot, hostName) {
@@ -957,15 +956,6 @@ function gateHostMemory(repoRoot, hostName) {
     ready,
     reason: ready ? 'host memory is compact and reusable' : 'host memory still has weak or uncompressed notes',
   };
-}
-
-function reflectHostMemory(repoRoot, hostName) {
-  const normalizedHost = normalizeHostName(hostName);
-  const changePath = resolveHostMemoryPath(repoRoot, normalizedHost, 'change');
-  ensureMemoryChangeFile(repoRoot, normalizedHost);
-  const line = `Reflection note for ${normalizedHost}: keep lessons host-local and reusable.`;
-  appendMemoryEntry(changePath, line);
-  return { targetPath: changePath };
 }
 
 function recordHostReflection(workspace, intake, report, hostName) {
@@ -1282,6 +1272,7 @@ function buildExportBundle(workspace, profileName) {
   const profile = readJson(profilePath);
   const bundle = {
     exportedAt: new Date().toISOString(),
+    host: workspace.activeHostName,
     manifest: workspace.manifest,
     profile,
     profileDoc: fs.readFileSync(profileDocPath, 'utf8'),
