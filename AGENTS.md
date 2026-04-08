@@ -22,6 +22,7 @@ The repo standardizes these outputs:
 - `[HANDOFF]` for ownership transfer
 - `[DELIVERY GATE]` for release closure
 - `regression-matrix.md` for proof and parity checks
+- `delivery-check` and the upgrade wrappers for executable release proof
 
 ## Host compatibility
 
@@ -76,6 +77,6 @@ Durable rules should be written where they belong first, then kept inside the ho
 - `memory/change/<host>.md` stores auto-captured lessons from change gates before promotion into that same host's memory file.
 - `memory learn` auto-promotes repeated change lessons into the active host's memory file during a successful gate.
 
-## V0.6.1 intent
+## V0.6.4 intent
 
-This release keeps the structured second brain between the model and the agents, but tightens the materialized read path and memory quality so the same durable knowledge is easier to trust, query, and recover. `brain add`, `brain query`, `brain explain`, `brain promote`, `brain demote`, `brain prune`, `brain snapshot`, `brain restore`, `brain diff`, and `brain sync` still capture, explain, and recover durable knowledge automatically from change, train, eval, memory, upgrade, and recovery flows.
+This release keeps the structured second brain between the model and the agents, but moves the release-critical proof paths into executable checks so upgrade replay, delivery closure, and brain hygiene are no longer only markdown contracts. `brain add`, `brain query`, `brain explain`, `brain promote`, `brain demote`, `brain prune`, `brain snapshot`, `brain restore`, `brain diff`, and `brain sync` still capture, explain, and recover durable knowledge automatically from change, train, eval, memory, upgrade, and recovery flows.

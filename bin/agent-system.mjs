@@ -5,6 +5,14 @@ import path from 'node:path';
 import process from 'node:process';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { buildDeliveryGateReport, renderDeliveryGate } from '../lib/artifacts.mjs';
+import { buildBrainDedupeReport, renderBrainDedupeReport } from '../lib/brain-hygiene.mjs';
+import {
+  buildUpgradeReplayReport,
+  ensureUpgradeWorkspace,
+  renderUpgradeReplayReport,
+  writeUpgradeSession,
+} from '../lib/upgrade.mjs';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -79,6 +87,9 @@ async function main() {
       return;
     case 'gate':
       handleGate(await readGateText(positional, flags));
+      return;
+    case 'delivery-check':
+      handleDeliveryCheck(workspace);
       return;
     case 'profile':
       printProfile(workspace);
@@ -390,6 +401,9 @@ function printHelp() {
     '    gate     Validate the current change intake and delivery gate',
     '  quick-update Prepare a fast update intake from target + intent',
     '  upgrade    Apply multi-agent instruction and memory upgrades',
+    '    apply    Write the current upgrade session and refresh docs',
+    '    sync     Rebuild the current upgrade trail in place',
+    '    replay   Compare the current docs against the last upgrade session',
     '  quick-fix  Handle a single-file code/config fix with a fast path',
     '  luau-quick Handle a single-file Luau fix with a Luau-specific fast path',
     '  luau-explain Explain the selected Luau route and repair proof',
@@ -427,11 +441,14 @@ function printHelp() {
     '    promote  Promote a brain entry to a stronger scope',
     '    demote   Demote a brain entry to a weaker scope',
     '    prune    Rebuild the brain index and drop duplicate noise',
+    '    dedupe   Report deterministic merge candidates for duplicate notes',
     '    snapshot Capture the current brain state',
     '    restore  Restore the brain from a snapshot',
     '    diff     Compare the current brain state against a snapshot',
     '    sync     Rebuild the materialized brain index',
+    '  delivery-check Validate the executable delivery gate for the current workspace',
     '  backup    Snapshot the current mutable workspace state',
+    '    validate Validate a generated backup bundle',
     '  restore   Restore a previously captured backup snapshot',
     '  bundle    Validate, diff, or prune backup bundles',
     '  status     Read or update live agent presence',
@@ -610,6 +627,10 @@ function handleValidate(workspace) {
   const { repoRoot, manifest, profile, profilePath, profileDocPath, statusCurrentPath, statusEventsPath, changeCurrentPath, changeHistoryPath, changeReadmePath, changeSchemaPath, changeTemplatePath, changeMemoryPath, trainingCurrentPath, trainingHistoryPath, trainingReadmePath, trainingSchemaPath, evalCurrentPath, evalHistoryPath, evalReadmePath, evalSchemaPath } = workspace;
   const { trainingContinuousPath, trainingContinuousHistoryPath, trainingContinuousReadmePath } = workspace;
   const { brainCurrentPath, brainHistoryPath, brainReadmePath, brainSchemaPath } = workspace;
+  const upgradeReadmePath = path.join(repoRoot, 'docs', 'upgrade', 'README.md');
+  const upgradeCurrentPath = path.join(repoRoot, 'docs', 'upgrade', 'current.json');
+  const upgradeHistoryPath = path.join(repoRoot, 'docs', 'upgrade', 'history.jsonl');
+  const upgradeSessionsReadmePath = path.join(repoRoot, 'docs', 'upgrade', 'sessions', 'README.md');
   const luauReadmePath = path.join(repoRoot, 'docs', 'luau', 'README.md');
   const luauCurrentPath = path.join(repoRoot, 'docs', 'luau', 'current.json');
   const luauHistoryPath = path.join(repoRoot, 'docs', 'luau', 'history.jsonl');
@@ -718,6 +739,18 @@ function handleValidate(workspace) {
   if (!fs.existsSync(evalSchemaPath)) {
     issues.push(`missing eval schema: ${path.relative(repoRoot, evalSchemaPath)}`);
   }
+  if (!fs.existsSync(upgradeReadmePath)) {
+    issues.push(`missing upgrade readme: ${path.relative(repoRoot, upgradeReadmePath)}`);
+  }
+  if (!fs.existsSync(upgradeCurrentPath)) {
+    issues.push(`missing upgrade current: ${path.relative(repoRoot, upgradeCurrentPath)}`);
+  }
+  if (!fs.existsSync(upgradeHistoryPath)) {
+    issues.push(`missing upgrade history: ${path.relative(repoRoot, upgradeHistoryPath)}`);
+  }
+  if (!fs.existsSync(upgradeSessionsReadmePath)) {
+    issues.push(`missing upgrade sessions readme: ${path.relative(repoRoot, upgradeSessionsReadmePath)}`);
+  }
   if (!fs.existsSync(luauReadmePath)) {
     issues.push(`missing luau repair readme: ${path.relative(repoRoot, luauReadmePath)}`);
   }
@@ -817,6 +850,14 @@ function handleGate(text) {
   console.log(`Blocked / Ready: ${missing.length === 0 ? 'Ready' : 'Blocked'}`);
   if (missing.length > 0) {
     console.log(`Missing fields: ${missing.join(', ')}`);
+    process.exit(1);
+  }
+}
+
+function handleDeliveryCheck(workspace) {
+  const report = buildDeliveryGateReport(workspace);
+  console.log(renderDeliveryGate(report));
+  if (report.blockedOrReady !== 'Ready') {
     process.exit(1);
   }
 }
@@ -2913,6 +2954,24 @@ function handleLuauGate(workspace, flags, positional) {
 }
 
 function handleUpgrade(workspace, flags, positional) {
+  const action = positional[0];
+  if (action === 'apply') {
+    handleUpgradeWrite(workspace, flags, positional.slice(1), 'apply');
+    return;
+  }
+  if (action === 'sync') {
+    handleUpgradeWrite(workspace, flags, positional.slice(1), 'sync');
+    return;
+  }
+  if (action === 'replay') {
+    handleUpgradeReplay(workspace, flags);
+    return;
+  }
+
+  handleUpgradeWrite(workspace, flags, positional, 'upgrade');
+}
+
+function handleUpgradeWrite(workspace, flags, positional, mode) {
   const targetPath = flags.files?.[0] || positional[0] || path.join(workspace.repoRoot, 'AGENTS.md');
   const absoluteTargetPath = path.isAbsolute(targetPath) ? targetPath : path.resolve(workspace.repoRoot, targetPath);
   if (!fs.existsSync(absoluteTargetPath)) {
@@ -2920,22 +2979,55 @@ function handleUpgrade(workspace, flags, positional) {
     process.exit(1);
   }
 
+  const hostName = normalizeHostName(flags.host || workspace.activeHostName);
+  const now = new Date().toISOString();
   const sourceText = fs.readFileSync(absoluteTargetPath, 'utf8');
-  const report = buildUpgradeReport(workspace, sourceText, absoluteTargetPath, normalizeHostName(flags.host || workspace.activeHostName));
+  const report = buildUpgradeReport(workspace, sourceText, absoluteTargetPath, hostName);
   const upgradedText = renderUpgradeSyncDoc(sourceText, report);
   fs.writeFileSync(absoluteTargetPath, upgradedText, 'utf8');
 
   const profileDocPath = workspace.profileDocPath;
+  let profileDocText = '';
   if (profileDocPath && path.resolve(profileDocPath) !== absoluteTargetPath && fs.existsSync(profileDocPath)) {
-    fs.writeFileSync(profileDocPath, renderUpgradeSyncDoc(fs.readFileSync(profileDocPath, 'utf8'), report), 'utf8');
+    profileDocText = fs.readFileSync(profileDocPath, 'utf8');
+    fs.writeFileSync(profileDocPath, renderUpgradeSyncDoc(profileDocText, report), 'utf8');
+  } else if (path.resolve(profileDocPath) === absoluteTargetPath) {
+    profileDocText = upgradedText;
   }
 
   syncUpgradeMemory(workspace, report);
 
-  console.log('[UPGRADE]');
+  const session = writeUpgradeSession(workspace, {
+    sessionId: `${now.replace(/[:.]/g, '-')}-${hostName}-${mode}`,
+    mode,
+    outcome: 'synced',
+    activeProfile: workspace.activeProfileName,
+    activeHost: hostName,
+    generatedAt: now,
+    targetPath: path.relative(workspace.repoRoot, absoluteTargetPath),
+    profileDocPath: path.relative(workspace.repoRoot, workspace.profileDocPath),
+    replaySource: '',
+    targetText: upgradedText,
+    profileDocText,
+    agents: report.agents,
+    hosts: report.hosts,
+    sections: report.sections,
+  });
+
+  console.log(mode === 'upgrade' ? '[UPGRADE]' : `[UPGRADE ${mode.toUpperCase()}]`);
   console.log(`Target: ${path.relative(workspace.repoRoot, absoluteTargetPath)}`);
   console.log(`Agents upgraded: ${report.agents.length}`);
   console.log(`Hosts synced: ${report.hosts.join(', ')}`);
+  console.log(`Session: ${session.sessionId}`);
+}
+
+function handleUpgradeReplay(workspace, flags) {
+  const hostName = normalizeHostName(flags.host || workspace.activeHostName);
+  const report = buildUpgradeReplayReport(workspace, hostName);
+  console.log(renderUpgradeReplayReport(report));
+  if (!report.ok) {
+    process.exit(1);
+  }
 }
 
 function handleTrain(workspace, flags, positional) {
@@ -4032,6 +4124,10 @@ function handleBrain(workspace, flags, positional) {
     handleBrainSync(workspace);
     return;
   }
+  if (action === 'dedupe') {
+    handleBrainDedupe(workspace, flags, positional.slice(1));
+    return;
+  }
   if (action === 'list') {
     handleBrainList(workspace, flags, positional.slice(1));
     return;
@@ -4218,6 +4314,12 @@ function handleBrainSync(workspace) {
   console.log(`Profile: ${current.activeProfile}`);
   console.log(`Entries: ${current.counts.total}`);
   console.log(`Status counts: active=${current.counts.active}, candidate=${current.counts.candidate}, demoted=${current.counts.demoted}, archived=${current.counts.archived}`);
+}
+
+function handleBrainDedupe(workspace, flags, positional) {
+  const scope = flags.scope || positional[0] || 'all';
+  const report = buildBrainDedupeReport(workspace, scope);
+  console.log(renderBrainDedupeReport(report));
 }
 
 function handleBrainList(workspace, flags, positional) {
@@ -4842,6 +4944,10 @@ function buildLintReport(workspace) {
     ['eval history exists', () => fs.existsSync(workspace.evalHistoryPath)],
     ['eval readme exists', () => fs.existsSync(workspace.evalReadmePath)],
     ['eval schema exists', () => fs.existsSync(workspace.evalSchemaPath)],
+    ['upgrade readme exists', () => fs.existsSync(path.join(workspace.repoRoot, 'docs', 'upgrade', 'README.md'))],
+    ['upgrade current exists', () => fs.existsSync(path.join(workspace.repoRoot, 'docs', 'upgrade', 'current.json'))],
+    ['upgrade history exists', () => fs.existsSync(path.join(workspace.repoRoot, 'docs', 'upgrade', 'history.jsonl'))],
+    ['upgrade sessions readme exists', () => fs.existsSync(path.join(workspace.repoRoot, 'docs', 'upgrade', 'sessions', 'README.md'))],
     ['luau repair readme exists', () => fs.existsSync(path.join(workspace.repoRoot, 'docs', 'luau', 'README.md'))],
     ['luau repair snapshot exists', () => fs.existsSync(path.join(workspace.repoRoot, 'docs', 'luau', 'current.json'))],
     ['luau repair history exists', () => fs.existsSync(path.join(workspace.repoRoot, 'docs', 'luau', 'history.jsonl'))],

@@ -32,6 +32,13 @@ function runAgent(args, cwd) {
   });
 }
 
+function runWrapper(wrapperName, cwd, args = []) {
+  return spawnSync('node', [path.join(repoRoot, 'bin', wrapperName), ...args], {
+    cwd,
+    encoding: 'utf8',
+  });
+}
+
 test('brain add/query/explain/snapshot/restore/sync manage the structured brain layer', () => {
   const workspace = createWorkspace();
   try {
@@ -107,6 +114,28 @@ test('training and change gates feed the brain automatically', () => {
     const query = runAgent(['brain', 'query', 'brain'], workspace);
     assert.equal(query.status, 0, query.stderr);
     assert.match(query.stdout, /\[BRAIN QUERY\]/);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('brain query wrapper works and dedupe reports merge candidates', () => {
+  const workspace = createWorkspace();
+  try {
+    const first = runAgent(['brain', 'add', '--host', 'qwen', '--scope', 'host:qwen', '--title', 'Route fallback lesson', '--status', 'candidate', 'Keep route fallback deterministic.'], workspace);
+    assert.equal(first.status, 0, first.stderr);
+    const second = runAgent(['brain', 'add', '--host', 'qwen', '--scope', 'host:qwen', '--title', 'Route fallback rule', '--status', 'candidate', 'Keep route fallback deterministic.'], workspace);
+    assert.equal(second.status, 0, second.stderr);
+
+    const query = runWrapper('brain-query.mjs', workspace, ['fallback']);
+    assert.equal(query.status, 0, query.stderr);
+    assert.match(query.stdout, /\[BRAIN QUERY\]/);
+    assert.match(query.stdout, /Route fallback lesson/);
+
+    const dedupe = runAgent(['brain', 'dedupe', '--scope', 'host:qwen'], workspace);
+    assert.equal(dedupe.status, 0, dedupe.stderr);
+    assert.match(dedupe.stdout, /\[BRAIN DEDUPE\]/);
+    assert.match(dedupe.stdout, /Merge candidates: 1/);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }

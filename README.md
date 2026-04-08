@@ -68,11 +68,11 @@ Short form:
 qwen extensions install Nanana291/agent-system
 ```
 
-## V0.6.1 scope
+## V0.6.4 scope
 
-This release keeps the structured second brain in place but tightens its materialization and reporting. `brain add`, `brain query`, `brain explain`, `brain promote`, `brain demote`, `brain prune`, `brain snapshot`, `brain restore`, `brain diff`, and `brain sync` still expose the knowledge layer between the model and the agents, now with more stable readback and clearer summaries.
+This release turns the critical proof paths into executable enforcement instead of markdown-only promises. `delivery-check`, `upgrade apply`, `upgrade sync`, `upgrade replay`, `brain dedupe`, and the backup validation wrapper now close the gap between documented behavior and real release checks.
 
-The brain is still event-sourced and fed by `change`, `train`, `eval`, `memory`, `upgrade`, and recovery flows. Durable lessons continue to land in `docs/brain/current.json` and `docs/brain/history.jsonl`, then sync into host and profile memory once they stabilize, but the read path now avoids noisy timestamp churn so the materialized state is easier to trust.
+The brain still stays event-sourced and fed by `change`, `train`, `eval`, `memory`, `upgrade`, and recovery flows, but the surface now includes a deterministic dedupe path and wrapper executables for the commands that carry the most release risk. Upgrade sessions are now materialized under `docs/upgrade/` so replay can compare the current docs against the last known good snapshot.
 
 Learning recovery still exists: `memory snapshot`, `memory restore`, `memory diff`, `memory rollback`, and `train rollback` preserve host learning state as a recoverable snapshot. Training packs remain versioned, host histories stay separated, and Luau repair / Luau learning still feed the training loop automatically.
 
@@ -168,11 +168,18 @@ node ./bin/agent-system.mjs memory capture change
 node ./bin/agent-system.mjs change memory-suggest
 node ./bin/agent-system.mjs quick-update bin/agent-system.mjs "prepare a fast update path for qwen"
 node ./bin/agent-system.mjs upgrade
+node ./bin/upgrade-apply.mjs
+node ./bin/upgrade-sync.mjs
+node ./bin/upgrade-replay.mjs
 node ./bin/agent-system.mjs backup ./agent-system-backup.json
+node ./bin/backup-validate.mjs ./agent-system-backup.json
+node ./bin/delivery-check.mjs
 node ./bin/agent-system.mjs restore --file ./agent-system-backup.json
 node ./bin/agent-system.mjs bundle validate --file ./agent-system-backup.json
 node ./bin/agent-system.mjs bundle diff --file ./agent-system-backup.json
 node ./bin/agent-system.mjs bundle prune --file ./agent-system-backup.json
+node ./bin/brain-query.mjs fallback
+node ./bin/brain-dedupe.mjs --scope host:qwen
 node ./bin/agent-system.mjs export --profile imphub
 node ./bin/agent-system.mjs import --file ./agent-system-export.json
 ```

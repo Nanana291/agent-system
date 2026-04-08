@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, cpSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, cpSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,6 +26,13 @@ function createWorkspace() {
 
 function runAgent(args, cwd) {
   return spawnSync('node', [cli, ...args], {
+    cwd,
+    encoding: 'utf8',
+  });
+}
+
+function runWrapper(wrapperName, cwd, args = []) {
+  return spawnSync('node', [path.join(repoRoot, 'bin', wrapperName), ...args], {
     cwd,
     encoding: 'utf8',
   });
@@ -90,6 +97,70 @@ test('upgrade is idempotent and replaces the existing sync block', () => {
 
     const agentsDoc = readFileSync(path.join(workspace, 'AGENTS.md'), 'utf8');
     assert.equal((agentsDoc.match(/agent-system-upgrade-start/g) || []).length, 1);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('upgrade apply creates upgrade session artifacts', () => {
+  const workspace = createWorkspace();
+  try {
+    writeFileSync(
+      path.join(workspace, 'AGENTS.md'),
+      `# Agent System
+
+## Agent 1 — The Scriptmaster
+- Owns logic.
+
+## Agent 2 — The UI Designer
+- Owns UI.
+`,
+      'utf8',
+    );
+
+    const result = runWrapper('upgrade-apply.mjs', workspace, ['--host', 'qwen']);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /\[UPGRADE APPLY\]/);
+    assert.match(result.stdout, /Session:/);
+
+    assert.equal(existsSync(path.join(workspace, 'docs', 'upgrade', 'current.json')), true);
+    assert.equal(existsSync(path.join(workspace, 'docs', 'upgrade', 'history.jsonl')), true);
+    assert.equal(existsSync(path.join(workspace, 'docs', 'upgrade', 'sessions', 'README.md')), true);
+
+    const current = JSON.parse(readFileSync(path.join(workspace, 'docs', 'upgrade', 'current.json'), 'utf8'));
+    assert.equal(current.mode, 'apply');
+    assert.equal(existsSync(path.join(workspace, current.sessionPath)), true);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('upgrade replay blocks when the materialized docs drift from the last session', () => {
+  const workspace = createWorkspace();
+  try {
+    writeFileSync(
+      path.join(workspace, 'AGENTS.md'),
+      `# Agent System
+
+## Agent 1 — The Scriptmaster
+- Owns logic.
+
+## Agent 2 — The UI Designer
+- Owns UI.
+`,
+      'utf8',
+    );
+
+    const apply = runWrapper('upgrade-apply.mjs', workspace, ['--host', 'qwen']);
+    assert.equal(apply.status, 0, apply.stderr);
+
+    writeFileSync(path.join(workspace, 'AGENTS.md'), '# drifted\n', 'utf8');
+
+    const replay = runWrapper('upgrade-replay.mjs', workspace, ['--host', 'qwen']);
+    assert.notEqual(replay.status, 0);
+    assert.match(replay.stdout, /\[UPGRADE REPLAY\]/);
+    assert.match(replay.stdout, /Drift:/);
+    assert.match(replay.stdout, /AGENTS\.md/);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }
