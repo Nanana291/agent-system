@@ -1,0 +1,13 @@
+{
+  "kind": "agent-system-luau-repair",
+  "version": 1,
+  "activeProfile": "imphub",
+  "activeHost": "qwen",
+  "selectedPath": "luau-repair",
+  "risk": "Low - no repair captured yet",
+  "issues": [],
+  "files": [],
+  "proof": "repair state not captured yet",
+  "ready": false,
+  "generatedAt": ""
+}

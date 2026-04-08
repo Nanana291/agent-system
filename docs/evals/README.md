@@ -13,4 +13,4 @@ This directory stores the automatic evaluation loop for `agent-system`.
 - `eval simulate` and `eval score` record the score without promoting memory.
 - `eval compare` records the delta against the latest evaluation run.
 - `eval promote` writes the durable lesson into the active profile and host memory after the score clears the threshold.
-
+- Luau repair snapshots automatically feed `eval` with Luau context after `luau-repair` runs.

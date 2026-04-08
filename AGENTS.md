@@ -55,7 +55,10 @@ Durable rules should be written where they belong first, then kept inside the ho
 - `route` auto-suggests `quick-fix` when the workspace has exactly one touched code/config file.
 - `luau-quick` handles a single-file Luau fix with a Luau-specific lock, gate, and memory note.
 - `route` keeps the generic quick-fix path for single-file code/config edits and adds Luau-specific wording when the single touched file is Luau.
-- `train` and `eval` auto-detect Luau work and write Luau-focused lessons into the training and evaluation logs.
+- `luau-explain` and `luau-diagnose` surface the Luau repair path and the issues that trigger it.
+- `luau-repair` applies multi-file Luau repairs, writes the repair snapshot, and syncs memory, docs, and AGENTS.
+- `luau-gate` validates the Luau repair snapshot before delivery.
+- `train` and `eval` auto-detect Luau work or a ready Luau repair snapshot and write Luau-focused lessons into the training and evaluation logs.
 - `luau-train` and `luau-eval` force the Luau learning focus when you want to train or score Luau work directly.
 - `upgrade` applies multi-agent instruction upgrades and syncs the resulting memory into the active profile and all supported host memories.
 - `docs/training/current.json`, `docs/training/history.jsonl`, and `docs/training/<session>.md` record the automatic training loop.
@@ -65,6 +68,6 @@ Durable rules should be written where they belong first, then kept inside the ho
 - `memory/change/<host>.md` stores auto-captured lessons from change gates before promotion into that same host's memory file.
 - `memory learn` auto-promotes repeated change lessons into the active host's memory file during a successful gate.
 
-## V0.5.5 intent
+## V0.5.6 intent
 
-This release keeps the portable recovery, training, and evaluation layers intact, and adds a Luau learning loop on top of the Luau quick path: the repo can still snapshot the mutable workspace, validate the bundle, prune duplicate noise, restore the state back into a clean checkout, prepare a fast update intake from just target plus intent, suggest a quick lock when one code/config file is touched, write a Luau lock, gate, and memory note directly when the single changed file is a Luau script, and now auto-feed that Luau context into training, evaluation, and host memory so repeated Luau work learns from the previous run.
+This release keeps the portable recovery, training, and evaluation layers intact, and adds a Luau auto-repair loop on top of the Luau quick path: the repo can still snapshot the mutable workspace, validate the bundle, prune duplicate noise, restore the state back into a clean checkout, prepare a fast update intake from just target plus intent, suggest a quick lock when one code/config file is touched, write a Luau lock, gate, and memory note directly when the single changed file is a Luau script, and now auto-explain, auto-diagnose, and auto-repair multi-file Luau work while feeding the resulting repair snapshot back into training, evaluation, and host memory so repeated Luau work learns from the previous run.

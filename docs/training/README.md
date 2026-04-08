@@ -13,4 +13,4 @@ This directory stores the automatic training loop for `agent-system`.
 - `train` writes the sync block in place instead of appending duplicates.
 - `train error` records prevention rules in the active host change memory.
 - `train replay` reuses the latest lesson without creating a second sync block.
-
+- Luau repair snapshots automatically feed `train` with Luau context after `luau-repair` runs.

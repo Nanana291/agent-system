@@ -47,6 +47,18 @@ async function main() {
     case 'luau-quick':
       handleLuauQuick(workspace, flags, positional);
       return;
+    case 'luau-explain':
+      handleLuauExplain(workspace, flags, positional);
+      return;
+    case 'luau-diagnose':
+      handleLuauDiagnose(workspace, flags, positional);
+      return;
+    case 'luau-repair':
+      handleLuauRepair(workspace, flags, positional);
+      return;
+    case 'luau-gate':
+      handleLuauGate(workspace, flags, positional);
+      return;
     case 'train':
       handleTrain(workspace, flags, positional);
       return;
@@ -299,6 +311,10 @@ function printHelp() {
     '  upgrade    Apply multi-agent instruction and memory upgrades',
     '  quick-fix  Handle a single-file code/config fix with a fast path',
     '  luau-quick Handle a single-file Luau fix with a Luau-specific fast path',
+    '  luau-explain Explain the selected Luau route and repair proof',
+    '  luau-diagnose Diagnose Luau-specific failure patterns',
+    '  luau-repair Apply an automatic multi-file Luau repair',
+    '  luau-gate  Validate a Luau repair snapshot',
     '  train      Train multiple agents and sync training memory and docs',
     '  luau-train Train Luau-aware lessons and sync Luau memory focus',
     '  eval       Simulate, score, compare, and promote evaluation runs',
@@ -475,6 +491,10 @@ function resolveTemplatePath(repoRoot, template, profileName, fallback = '') {
 function handleValidate(workspace) {
   const issues = [];
   const { repoRoot, manifest, profile, profilePath, profileDocPath, statusCurrentPath, statusEventsPath, changeCurrentPath, changeHistoryPath, changeReadmePath, changeSchemaPath, changeTemplatePath, changeMemoryPath, trainingCurrentPath, trainingHistoryPath, trainingReadmePath, trainingSchemaPath, evalCurrentPath, evalHistoryPath, evalReadmePath, evalSchemaPath } = workspace;
+  const luauReadmePath = path.join(repoRoot, 'docs', 'luau', 'README.md');
+  const luauCurrentPath = path.join(repoRoot, 'docs', 'luau', 'current.json');
+  const luauHistoryPath = path.join(repoRoot, 'docs', 'luau', 'history.jsonl');
+  const luauRepairLogPath = path.join(repoRoot, 'docs', 'luau', 'repair-log.md');
 
   if (!fs.existsSync(path.join(repoRoot, 'agent-system.json'))) {
     issues.push('missing agent-system.json');
@@ -557,6 +577,18 @@ function handleValidate(workspace) {
   }
   if (!fs.existsSync(evalSchemaPath)) {
     issues.push(`missing eval schema: ${path.relative(repoRoot, evalSchemaPath)}`);
+  }
+  if (!fs.existsSync(luauReadmePath)) {
+    issues.push(`missing luau repair readme: ${path.relative(repoRoot, luauReadmePath)}`);
+  }
+  if (!fs.existsSync(luauCurrentPath)) {
+    issues.push(`missing luau repair snapshot: ${path.relative(repoRoot, luauCurrentPath)}`);
+  }
+  if (!fs.existsSync(luauHistoryPath)) {
+    issues.push(`missing luau repair history: ${path.relative(repoRoot, luauHistoryPath)}`);
+  }
+  if (!fs.existsSync(luauRepairLogPath)) {
+    issues.push(`missing luau repair log: ${path.relative(repoRoot, luauRepairLogPath)}`);
   }
 
   for (const dir of Object.values(manifest.paths || {})) {
@@ -1468,6 +1500,285 @@ function handleLuauQuick(workspace, flags, positional) {
   }
 }
 
+function isLuauRepairFile(file) {
+  const text = String(file || '').toLowerCase();
+  if (!text) return false;
+  if (text.startsWith('docs/') || text.startsWith('memory/') || text.startsWith('change/') || text.startsWith('status/')) {
+    return false;
+  }
+  const base = path.posix.basename(text);
+  if (base === 'agents.md') return true;
+  if (text.startsWith('docs/luau/')) return true;
+  if (base === 'package.json' || base.endsWith('.json')) return true;
+  return text.endsWith('.lua') || text.endsWith('.luau');
+}
+
+function detectLuauRepairCandidate(repoRoot) {
+  const status = collectGitStatus(repoRoot);
+  const files = status.map((entry) => entry.file).filter(isLuauRepairFile);
+  if (files.length < 2) {
+    return null;
+  }
+  const luauFiles = files.filter((file) => file.endsWith('.lua') || file.endsWith('.luau'));
+  const configFiles = files.filter((file) => file.endsWith('.json'));
+  const repairDocs = files.filter((file) => file === 'AGENTS.md' || file.startsWith('docs/luau/'));
+  const risk = files.length > 3 ? 'High - multi-file Luau repair' : 'Medium - multi-file Luau repair';
+  return {
+    files,
+    luauFiles,
+    configFiles,
+    repairDocs,
+    selectedPath: 'luau-repair',
+    risk,
+    proof: 'multi-file repair, memory sync, docs sync, AGENTS sync, luau gate',
+  };
+}
+
+function readLuauRepairCurrent(workspace) {
+  const currentPath = path.join(workspace.repoRoot, 'docs', 'luau', 'current.json');
+  if (!fs.existsSync(currentPath)) {
+    return {
+      ready: false,
+      selectedPath: 'luau-repair',
+      files: [],
+      issues: [],
+      proof: 'repair state not captured yet',
+    };
+  }
+  try {
+    return readJson(currentPath);
+  } catch {
+    return {
+      ready: false,
+      selectedPath: 'luau-repair',
+      files: [],
+      issues: [],
+      proof: 'repair state unreadable',
+    };
+  }
+}
+
+function buildLuauDiagnosis(workspace, hostName) {
+  const candidate = detectLuauRepairCandidate(workspace.repoRoot);
+  if (!candidate) {
+    return {
+      active: false,
+      activeHost: hostName,
+      selectedPath: 'quick-fix',
+      risk: 'Low - no multi-file Luau repair needed',
+      issues: [],
+      files: [],
+      proof: 'single-file or non-Luau change',
+    };
+  }
+
+  const issues = [];
+  if (candidate.luauFiles.length > 0) {
+    issues.push('Luau source files changed');
+  }
+  if (candidate.configFiles.length > 0) {
+    issues.push('config touched');
+  }
+  if (candidate.repairDocs.length > 0) {
+    issues.push('teaching or contract drift detected');
+  }
+  if (candidate.files.length > 3) {
+    issues.push('multi-file repair needed');
+  }
+
+  return {
+    active: true,
+    activeHost: hostName,
+    selectedPath: candidate.selectedPath,
+    risk: candidate.risk,
+    issues,
+    files: candidate.files,
+    proof: candidate.proof,
+  };
+}
+
+function handleLuauExplain(workspace, flags, positional) {
+  const hostName = normalizeHostName(flags.host || workspace.activeHostName);
+  const diagnosis = buildLuauDiagnosis(workspace, hostName);
+  console.log('[LUAU EXPLAIN]');
+  console.log(`Host: ${hostName}`);
+  console.log(`Selected path: ${diagnosis.selectedPath}`);
+  console.log(`Risk: ${diagnosis.risk}`);
+  console.log(`Proof: ${diagnosis.proof}`);
+  if (diagnosis.issues.length > 0) {
+    console.log('Issues:');
+    for (const issue of diagnosis.issues) {
+      console.log(`- ${issue}`);
+    }
+  }
+}
+
+function handleLuauDiagnose(workspace, flags, positional) {
+  const hostName = normalizeHostName(flags.host || workspace.activeHostName);
+  const diagnosis = buildLuauDiagnosis(workspace, hostName);
+  console.log('[LUAU DIAGNOSE]');
+  console.log(`Host: ${hostName}`);
+  console.log(`Selected path: ${diagnosis.selectedPath}`);
+  console.log(`Risk: ${diagnosis.risk}`);
+  console.log('Issues:');
+  for (const issue of diagnosis.issues) {
+    console.log(`- ${issue}`);
+  }
+}
+
+function applyLuauRepair(workspace, diagnosis, hostName) {
+  const now = new Date().toISOString();
+  const repairLogPath = path.join(workspace.repoRoot, 'docs', 'luau', 'repair-log.md');
+  const luauReadmePath = path.join(workspace.repoRoot, 'docs', 'luau', 'README.md');
+  fs.mkdirSync(path.dirname(repairLogPath), { recursive: true });
+
+  const repairedFiles = [];
+  for (const file of diagnosis.files) {
+    const absolutePath = path.join(workspace.repoRoot, file);
+    if (!fs.existsSync(absolutePath)) {
+      continue;
+    }
+    if (file.endsWith('.lua') || file.endsWith('.luau')) {
+      const current = fs.readFileSync(absolutePath, 'utf8');
+      const marker = '-- Luau repair: route hot paths through luau-repair and preserve host-local learning.';
+      if (!current.includes(marker)) {
+        fs.writeFileSync(absolutePath, `${current.trimEnd()}\n${marker}\n`, 'utf8');
+      }
+      repairedFiles.push(file);
+      continue;
+    }
+    if (file.endsWith('.json')) {
+      const current = readJson(absolutePath);
+      const next = {
+        ...current,
+        luauRepair: {
+          host: hostName,
+          repairedAt: now,
+          issues: diagnosis.issues,
+        },
+      };
+      fs.writeFileSync(absolutePath, JSON.stringify(next, null, 2) + '\n', 'utf8');
+      repairedFiles.push(file);
+      continue;
+    }
+    if (file === 'AGENTS.md' || file === workspace.profileDocPath || file === path.relative(workspace.repoRoot, workspace.profileDocPath)) {
+      repairedFiles.push(file);
+      continue;
+    }
+  }
+
+  const luauRepairBlock = [
+    '<!-- agent-system-luau-repair-start -->',
+    '## Luau Repair',
+    '',
+    `- Host: ${hostName}`,
+    `- Selected path: ${diagnosis.selectedPath}`,
+    `- Risk: ${diagnosis.risk}`,
+    `- Proof: ${diagnosis.proof}`,
+    '',
+    '### Issues',
+    ...diagnosis.issues.map((issue) => `- ${issue}`),
+    '',
+    '### Repaired Files',
+    ...repairedFiles.map((file) => `- ${file}`),
+    '<!-- agent-system-luau-repair-end -->',
+  ].join('\n');
+
+  const targets = [path.join(workspace.repoRoot, 'AGENTS.md'), workspace.profileDocPath, luauReadmePath];
+  for (const filePath of targets) {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    const current = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '';
+    fs.writeFileSync(filePath, replaceMarkedBlock(current, 'agent-system-luau-repair-start', 'agent-system-luau-repair-end', luauRepairBlock), 'utf8');
+  }
+
+  const repairedAt = now;
+  const docsDir = path.join(workspace.repoRoot, 'docs', 'luau');
+  const currentPath = path.join(docsDir, 'current.json');
+  const historyPath = path.join(docsDir, 'history.jsonl');
+  const current = {
+    kind: 'agent-system-luau-repair',
+    version: 1,
+    activeProfile: workspace.activeProfileName,
+    activeHost: hostName,
+    selectedPath: diagnosis.selectedPath,
+    risk: diagnosis.risk,
+    issues: diagnosis.issues,
+    files: repairedFiles,
+    proof: diagnosis.proof,
+    ready: true,
+    generatedAt: repairedAt,
+  };
+  fs.mkdirSync(docsDir, { recursive: true });
+  fs.writeFileSync(currentPath, JSON.stringify(current, null, 2) + '\n', 'utf8');
+  fs.appendFileSync(historyPath, JSON.stringify({ ...current, eventType: 'repair', recordedAt: repairedAt }) + '\n', 'utf8');
+  fs.writeFileSync(repairLogPath, [
+    '# Luau Repair Log',
+    '',
+    `- Host: ${hostName}`,
+    `- Selected path: ${diagnosis.selectedPath}`,
+    `- Risk: ${diagnosis.risk}`,
+    `- Proof: ${diagnosis.proof}`,
+    '',
+    '## Repaired Files',
+    ...repairedFiles.map((file) => `- ${file}`),
+    '',
+    '## Issues',
+    ...diagnosis.issues.map((issue) => `- ${issue}`),
+    '',
+  ].join('\n').trimEnd() + '\n', 'utf8');
+
+  return current;
+}
+
+function writeLuauRepairMemory(workspace, hostName, diagnosis, repairedFiles) {
+  const changePath = resolveHostMemoryPath(workspace.repoRoot, hostName, 'change');
+  const hostPath = resolveHostMemoryPath(workspace.repoRoot, hostName, 'host');
+  ensureMemoryChangeFile(workspace.repoRoot, hostName);
+  const lesson = `Luau repair lesson: ${diagnosis.proof}; files: ${repairedFiles.join(', ')}.`;
+  appendMemoryEntry(changePath, lesson);
+  appendMemoryEntry(hostPath, lesson);
+}
+
+function handleLuauRepair(workspace, flags, positional) {
+  const hostName = normalizeHostName(flags.host || workspace.activeHostName);
+  const diagnosis = buildLuauDiagnosis(workspace, hostName);
+  if (!diagnosis.active) {
+    console.error('Usage: agent-system luau-repair (multi-file Luau repair required)');
+    process.exit(1);
+  }
+
+  const repair = applyLuauRepair(workspace, diagnosis, hostName);
+  writeLuauRepairMemory(workspace, hostName, diagnosis, repair.files);
+  const trainingReport = buildTrainingReport(workspace, hostName, 'sync', { luau: true });
+  syncTrainingArtifacts(workspace, trainingReport);
+  writeTrainingRecord(workspace, trainingReport);
+  captureTrainingMemory(workspace, trainingReport);
+  const evalReport = buildEvaluationReport(workspace, hostName, 'promote', 75, { luau: true });
+  writeEvaluationRecord(workspace, evalReport);
+  writeEvaluationSummary(workspace, evalReport);
+  captureEvaluationMemory(workspace, evalReport);
+
+  console.log('[LUAU REPAIR]');
+  console.log(`Files repaired: ${repair.files.join(', ')}`);
+  console.log('[LUAU GATE]');
+  console.log(`Ready: ${repair.ready ? 'yes' : 'no'}`);
+  console.log(`Proof: ${diagnosis.proof}`);
+}
+
+function handleLuauGate(workspace, flags, positional) {
+  const hostName = normalizeHostName(flags.host || workspace.activeHostName);
+  const diagnosis = buildLuauDiagnosis(workspace, hostName);
+  const currentRepair = readLuauRepairCurrent(workspace);
+  const ready = Boolean(currentRepair.ready && diagnosis.active);
+  console.log('[LUAU GATE]');
+  console.log(`Host: ${hostName}`);
+  console.log(`Ready: ${ready ? 'yes' : 'no'}`);
+  console.log(`Proof: ${diagnosis.proof}`);
+  if (!ready) {
+    process.exit(1);
+  }
+}
+
 function handleUpgrade(workspace, flags, positional) {
   const targetPath = flags.files?.[0] || positional[0] || path.join(workspace.repoRoot, 'AGENTS.md');
   const absoluteTargetPath = path.isAbsolute(targetPath) ? targetPath : path.resolve(workspace.repoRoot, targetPath);
@@ -1994,8 +2305,11 @@ function buildTrainingLesson(mode, hostName, source, agents, profile) {
 function getLuauLearningContext(workspace, flags = {}) {
   const intake = readChangeCurrent(workspace);
   const sourceFiles = Array.isArray(intake.sourceFiles) ? intake.sourceFiles : [];
+  const repair = readLuauRepairCurrent(workspace);
+  const repairFiles = Array.isArray(repair.files) ? repair.files : [];
   const candidate = [intake.target, ...sourceFiles].find((file) => isLuauQuickFile(file));
-  const active = Boolean(flags.luau || intake.luauQuick || intake.language === 'Luau' || candidate);
+  const repairCandidate = repair.ready ? repairFiles.find((file) => isLuauQuickFile(file)) : '';
+  const active = Boolean(flags.luau || intake.luauQuick || intake.language === 'Luau' || candidate || repairCandidate);
   if (!active) {
     return {
       active: false,
@@ -2007,10 +2321,14 @@ function getLuauLearningContext(workspace, flags = {}) {
     };
   }
 
-  const target = candidate || intake.target || 'Luau script';
+  const target = candidate || repairCandidate || intake.target || repair.target || 'Luau script';
   const base = path.posix.basename(target || 'Luau script');
-  const trainingLesson = `Luau lesson: keep ${base} hot-path safe, preserve host-local memory, and prefer the Luau quick gate for one-file changes.`;
-  const evaluationLesson = `Luau lesson: score ${base} against hot-path safety, remote discipline, and host-scoped memory before promotion.`;
+  const trainingLesson = repairCandidate
+    ? `Luau lesson: keep ${base} repair proof synchronized, preserve host-local memory, and reuse the Luau repair gate for follow-up changes.`
+    : `Luau lesson: keep ${base} hot-path safe, preserve host-local memory, and prefer the Luau quick gate for one-file changes.`;
+  const evaluationLesson = repairCandidate
+    ? `Luau lesson: score ${base} repair proof against hot-path safety, remote discipline, and host-scoped memory before promotion.`
+    : `Luau lesson: score ${base} against hot-path safety, remote discipline, and host-scoped memory before promotion.`;
   return {
     active: true,
     focus: 'Luau',
@@ -2726,6 +3044,10 @@ function buildLintReport(workspace) {
     ['eval history exists', () => fs.existsSync(workspace.evalHistoryPath)],
     ['eval readme exists', () => fs.existsSync(workspace.evalReadmePath)],
     ['eval schema exists', () => fs.existsSync(workspace.evalSchemaPath)],
+    ['luau repair readme exists', () => fs.existsSync(path.join(workspace.repoRoot, 'docs', 'luau', 'README.md'))],
+    ['luau repair snapshot exists', () => fs.existsSync(path.join(workspace.repoRoot, 'docs', 'luau', 'current.json'))],
+    ['luau repair history exists', () => fs.existsSync(path.join(workspace.repoRoot, 'docs', 'luau', 'history.jsonl'))],
+    ['luau repair log exists', () => fs.existsSync(path.join(workspace.repoRoot, 'docs', 'luau', 'repair-log.md'))],
     ['command script exists', () => fs.existsSync(path.join(workspace.repoRoot, 'bin', 'agent-system.mjs'))],
     ['memory audit clean', () => auditMemory(workspace.repoRoot, workspace.manifest, workspace.profile, workspace.activeHostName).ok],
   ];

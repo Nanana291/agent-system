@@ -67,11 +67,13 @@ Short form:
 qwen extensions install Nanana291/agent-system
 ```
 
-## V0.5.5 scope
+## V0.5.6 scope
 
-This release turns Luau into a learning loop, not just a fast path. `luau-quick` still handles the one-file Luau fix path, but `train` and `eval` now auto-detect Luau work, write Luau-focused lessons into the training and evaluation logs, and sync those lessons into host memory so the next Luau run starts with better context.
+This release adds a Luau auto-repair loop on top of the existing learning path. `luau-explain` explains the repair route and proof, `luau-diagnose` reports Luau-specific issues, `luau-repair` can repair multi-file Luau changes across code, config, docs, memory, and `AGENTS.md`, and `luau-gate` blocks incomplete repairs until the repair snapshot is ready.
 
-The earlier evaluation loop remains in place: the repository can still simulate a run, score it, compare it against the last evaluation, and promote the durable lessons into the active profile and host memories when the score clears the threshold. The new Luau-specific aliases `luau-train` and `luau-eval` expose the same loop directly when you want to force the focus.
+The Luau learning loop now also reuses the repair snapshot automatically. `train` and `eval` auto-detect a completed Luau repair, write Luau-focused lessons into the training and evaluation logs, and sync those lessons into host memory so the next Luau run starts with repair-aware context.
+
+The earlier evaluation loop remains in place: the repository can still simulate a run, score it, compare it against the last evaluation, and promote the durable lessons into the active profile and host memories when the score clears the threshold. The Luau-specific aliases `luau-train` and `luau-eval` still expose the same loop directly when you want to force the focus.
 
 ## Memory layer
 
@@ -115,6 +117,10 @@ node ./bin/agent-system.mjs train error --host qwen
 node ./bin/agent-system.mjs train replay --host qwen
 node ./bin/agent-system.mjs quick-fix --host qwen
 node ./bin/agent-system.mjs luau-quick --host qwen
+node ./bin/agent-system.mjs luau-explain --host qwen
+node ./bin/agent-system.mjs luau-diagnose --host qwen
+node ./bin/agent-system.mjs luau-repair --host qwen
+node ./bin/agent-system.mjs luau-gate --host qwen
 node ./bin/agent-system.mjs eval
 node ./bin/agent-system.mjs luau-eval
 node ./bin/agent-system.mjs eval compare --host qwen
