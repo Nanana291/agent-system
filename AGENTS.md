@@ -65,8 +65,12 @@ Durable rules should be written where they belong first, then kept inside the ho
 - `memory gate` can demote weak host lessons back into `memory/change/<host>.md` before promotion.
 - `train` and `eval` auto-detect Luau work or a ready Luau repair snapshot and write Luau-focused lessons into the training and evaluation logs.
 - `luau-train` and `luau-eval` force the Luau learning focus when you want to train or score Luau work directly.
+- `train status` prints the current training state, the continuous-training state, and the latest host pack snapshot.
+- `train history` prints recent host-scoped training runs without mutating the training log.
 - `train rollback` restores the latest host learning snapshot for the active host.
 - `upgrade` applies multi-agent instruction upgrades and syncs the resulting memory into the active profile and all supported host memories.
+- `upgrade preview` and `upgrade status` inspect the upgrade target without writing files.
+- `upgrade docs`, `upgrade profile`, `upgrade memory`, and `upgrade hosts` let you scope the upgrade pass to docs, profile memory, or host memory layers.
 - `docs/training/current.json`, `docs/training/history.jsonl`, and `docs/training/<session>.md` record the automatic training loop.
 - `docs/training/continuous.json`, `docs/training/continuous-history.jsonl`, and `docs/training/continuous.md` record the continuous-training loop state.
 - `docs/training/recovery/<host>/latest.json`, `docs/training/recovery/<host>/history.jsonl`, and `docs/training/recovery/<host>/snapshots/<timestamp>.json` record host learning recovery snapshots.
@@ -76,6 +80,6 @@ Durable rules should be written where they belong first, then kept inside the ho
 - `memory/change/<host>.md` stores auto-captured lessons from change gates before promotion into that same host's memory file.
 - `memory learn` auto-promotes repeated change lessons into the active host's memory file during a successful gate.
 
-## V0.6.1 intent
+## V0.6.2 intent
 
 This release keeps the structured second brain between the model and the agents, but tightens the materialized read path and memory quality so the same durable knowledge is easier to trust, query, and recover. `brain add`, `brain query`, `brain explain`, `brain promote`, `brain demote`, `brain prune`, `brain snapshot`, `brain restore`, `brain diff`, and `brain sync` still capture, explain, and recover durable knowledge automatically from change, train, eval, memory, upgrade, and recovery flows.

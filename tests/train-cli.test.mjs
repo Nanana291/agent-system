@@ -191,3 +191,42 @@ test('train generates a training pack after enough host cycles', () => {
     rmSync(workspace, { recursive: true, force: true });
   }
 });
+
+test('train status reports the current host training state without mutating files', () => {
+  const workspace = createWorkspace();
+  try {
+    const seeded = runAgent(['train', '--host', 'qwen'], workspace);
+    assert.equal(seeded.status, 0, seeded.stderr);
+
+    const result = runAgent(['train', 'status', '--host', 'qwen'], workspace);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /\[TRAIN STATUS\]/);
+    assert.match(result.stdout, /Host: qwen/);
+    assert.match(result.stdout, /Continuous summary:/);
+    assert.match(result.stdout, /Current lesson:/);
+    assert.match(result.stdout, /Training pack:/);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('train history prints recent runs for the active host', () => {
+  const workspace = createWorkspace();
+  try {
+    const first = runAgent(['train', '--host', 'qwen'], workspace);
+    assert.equal(first.status, 0, first.stderr);
+    const second = runAgent(['train', 'review', '--host', 'qwen'], workspace);
+    assert.equal(second.status, 0, second.stderr);
+
+    const result = runAgent(['train', 'history', '--host', 'qwen', '--limit', '1'], workspace);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /\[TRAIN HISTORY\]/);
+    assert.match(result.stdout, /Host: qwen/);
+    assert.match(result.stdout, /Showing: 1/);
+    assert.match(result.stdout, /review/);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});

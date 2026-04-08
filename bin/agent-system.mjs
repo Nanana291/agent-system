@@ -390,6 +390,13 @@ function printHelp() {
     '    gate     Validate the current change intake and delivery gate',
     '  quick-update Prepare a fast update intake from target + intent',
     '  upgrade    Apply multi-agent instruction and memory upgrades',
+    '    apply    Run the full upgrade sync pass',
+    '    preview  Inspect the upgrade target without writing files',
+    '    status   Alias for preview with the current sync scope',
+    '    docs     Sync only the agent/profile docs, not memory',
+    '    profile  Sync only the active profile doc and profile memory',
+    '    memory   Sync only memory layers for the active profile/hosts',
+    '    hosts    Sync only host memory layers',
     '  quick-fix  Handle a single-file code/config fix with a fast path',
     '  luau-quick Handle a single-file Luau fix with a Luau-specific fast path',
     '  luau-explain Explain the selected Luau route and repair proof',
@@ -397,6 +404,16 @@ function printHelp() {
     '  luau-repair Apply an automatic multi-file Luau repair',
     '  luau-gate  Validate a Luau repair snapshot',
     '  train      Train multiple agents and sync training memory and docs',
+    '    error    Record prevention rules instead of a success lesson',
+    '    review   Review the latest host state without changing the route',
+    '    replay   Reuse the latest durable lesson',
+    '    promote  Promote durable lessons into host memory',
+    '    sync     Rewrite the sync block without changing the focus',
+    '    status   Show the current training state and latest host pack',
+    '    history  Show recent training runs for the active host',
+    '    explain  Write the per-host training audit trail',
+    '    compare  Compare the latest host training runs',
+    '    packs    Inspect or regenerate the host training pack',
     '  luau-train Train Luau-aware lessons and sync Luau memory focus',
     '    rollback Restore the latest active host training snapshot',
     '  eval       Simulate, score, compare, and promote evaluation runs',
@@ -2913,7 +2930,10 @@ function handleLuauGate(workspace, flags, positional) {
 }
 
 function handleUpgrade(workspace, flags, positional) {
-  const targetPath = flags.files?.[0] || positional[0] || path.join(workspace.repoRoot, 'AGENTS.md');
+  const actionInput = positional[0];
+  const action = normalizeUpgradeAction(actionInput);
+  const targetIndex = action !== 'apply' ? 1 : 0;
+  const targetPath = flags.files?.[0] || positional[targetIndex] || path.join(workspace.repoRoot, 'AGENTS.md');
   const absoluteTargetPath = path.isAbsolute(targetPath) ? targetPath : path.resolve(workspace.repoRoot, targetPath);
   if (!fs.existsSync(absoluteTargetPath)) {
     console.error(`Upgrade target not found: ${targetPath}`);
@@ -2922,17 +2942,18 @@ function handleUpgrade(workspace, flags, positional) {
 
   const sourceText = fs.readFileSync(absoluteTargetPath, 'utf8');
   const report = buildUpgradeReport(workspace, sourceText, absoluteTargetPath, normalizeHostName(flags.host || workspace.activeHostName));
-  const upgradedText = renderUpgradeSyncDoc(sourceText, report);
-  fs.writeFileSync(absoluteTargetPath, upgradedText, 'utf8');
-
-  const profileDocPath = workspace.profileDocPath;
-  if (profileDocPath && path.resolve(profileDocPath) !== absoluteTargetPath && fs.existsSync(profileDocPath)) {
-    fs.writeFileSync(profileDocPath, renderUpgradeSyncDoc(fs.readFileSync(profileDocPath, 'utf8'), report), 'utf8');
+  if (action === 'preview' || action === 'status') {
+    printUpgradePreview(report, action);
+    return;
   }
 
-  syncUpgradeMemory(workspace, report);
+  const scope = resolveUpgradeSyncScope(action);
+  syncUpgradeArtifacts(workspace, report, scope);
 
   console.log('[UPGRADE]');
+  if (action !== 'apply') {
+    console.log(`Mode: ${action}`);
+  }
   console.log(`Target: ${path.relative(workspace.repoRoot, absoluteTargetPath)}`);
   console.log(`Agents upgraded: ${report.agents.length}`);
   console.log(`Hosts synced: ${report.hosts.join(', ')}`);
@@ -2954,6 +2975,14 @@ function handleTrain(workspace, flags, positional) {
   }
   if (modeInput === 'rollback') {
     handleTrainRollback(workspace, flags);
+    return;
+  }
+  if (modeInput === 'status') {
+    handleTrainStatus(workspace, flags);
+    return;
+  }
+  if (modeInput === 'history') {
+    handleTrainHistory(workspace, flags);
     return;
   }
   const mode = normalizeTrainMode(modeInput);
@@ -2985,6 +3014,43 @@ function handleTrain(workspace, flags, positional) {
   }
   if (report.luauLesson) {
     console.log(`Luau lesson: ${report.luauLesson}`);
+  }
+}
+
+function normalizeUpgradeAction(value) {
+  const action = String(value || 'apply').trim().toLowerCase();
+  if (action === 'preview' || action === 'status' || action === 'docs' || action === 'profile' || action === 'memory' || action === 'hosts' || action === 'apply') {
+    return action;
+  }
+  return 'apply';
+}
+
+function resolveUpgradeSyncScope(action) {
+  switch (action) {
+    case 'docs':
+      return { docs: true, profileDoc: true, profileMemory: false, hostMemory: false };
+    case 'profile':
+      return { docs: false, profileDoc: true, profileMemory: true, hostMemory: false };
+    case 'memory':
+      return { docs: false, profileDoc: false, profileMemory: true, hostMemory: true };
+    case 'hosts':
+      return { docs: false, profileDoc: false, profileMemory: false, hostMemory: true };
+    default:
+      return { docs: true, profileDoc: true, profileMemory: true, hostMemory: true };
+  }
+}
+
+function printUpgradePreview(report, action) {
+  console.log('[UPGRADE PREVIEW]');
+  console.log(`Mode: ${action}`);
+  console.log(`Target: ${path.relative(process.cwd(), report.targetPath)}`);
+  console.log(`Profile: ${report.profile}`);
+  console.log(`Host focus: ${report.activeHost}`);
+  console.log(`Sections: ${report.sections.length}`);
+  console.log(`Agents upgraded: ${report.agents.length}`);
+  console.log(`Hosts synced: ${report.hosts.join(', ')}`);
+  for (const agent of report.agents.slice(0, 5)) {
+    console.log(`- ${agent.title}`);
   }
 }
 
@@ -3640,6 +3706,57 @@ function handleTrainingPacks(workspace, flags) {
   console.log(`Generated: ${report.generated ? 'yes' : 'no'}`);
   console.log(`Cycles: ${report.cycles}`);
   console.log(`Pack: ${path.relative(workspace.repoRoot, report.path)}`);
+}
+
+function handleTrainStatus(workspace, flags) {
+  const hostName = normalizeHostName(flags.host || workspace.activeHostName);
+  const current = readTrainingCurrent(workspace);
+  const continuous = readTrainingContinuousCurrent(workspace);
+  const history = readTrainingHistory(workspace).filter((entry) => normalizeHostName(entry.activeHost) === hostName);
+  const latest = history[history.length - 1] || current;
+  const latestSnapshot = readLatestLearningSnapshot(workspace.repoRoot, hostName);
+
+  console.log('[TRAIN STATUS]');
+  console.log(`Host: ${hostName}`);
+  console.log(`Mode: ${current.mode}`);
+  console.log(`Outcome: ${current.outcome}`);
+  console.log(`Focus: ${current.focus || 'general'}`);
+  console.log(`Latest session: ${latest.sessionId || 'n/a'}`);
+  console.log(`Current lesson: ${current.lesson || 'n/a'}`);
+  if (current.luauLesson) {
+    console.log(`Luau lesson: ${current.luauLesson}`);
+  }
+  console.log(`Training log: ${path.relative(workspace.repoRoot, workspace.trainingCurrentPath)}`);
+  console.log(`Continuous state: ${path.relative(workspace.repoRoot, workspace.trainingContinuousPath)}`);
+  console.log(`Continuous summary: ${path.relative(workspace.repoRoot, workspace.trainingContinuousReadmePath)}`);
+  console.log(`Recent runs: ${history.length}`);
+  console.log(`Auto promotion: ${continuous.autoPromote ? 'yes' : 'no'}`);
+  console.log(`Promoted lessons: ${continuous.promotedMemory}`);
+  console.log(`Host memory: ${continuous.hostMemoryPath ? path.relative(workspace.repoRoot, path.join(workspace.repoRoot, continuous.hostMemoryPath)) : 'n/a'}`);
+  if (continuous.trainingPackPath) {
+    console.log(`Training pack: ${path.relative(workspace.repoRoot, path.join(workspace.repoRoot, continuous.trainingPackPath))}`);
+  } else {
+    const packPath = resolveHostMemoryPath(workspace.repoRoot, hostName, 'packs');
+    console.log(`Training pack: ${path.relative(workspace.repoRoot, packPath)}`);
+  }
+  if (latestSnapshot.snapshotPath) {
+    console.log(`Recovery snapshot: ${path.relative(workspace.repoRoot, latestSnapshot.snapshotPath)}`);
+  }
+}
+
+function handleTrainHistory(workspace, flags) {
+  const hostName = normalizeHostName(flags.host || workspace.activeHostName);
+  const limit = parseCount(flags.limit, 5);
+  const history = readTrainingHistory(workspace).filter((entry) => normalizeHostName(entry.activeHost) === hostName);
+  const recent = history.slice(-limit);
+
+  console.log('[TRAIN HISTORY]');
+  console.log(`Host: ${hostName}`);
+  console.log(`Entries: ${history.length}`);
+  console.log(`Showing: ${recent.length}`);
+  for (const entry of recent) {
+    console.log(`- ${entry.sessionId || 'n/a'} | ${entry.mode || 'success'} | ${entry.outcome || 'applied'} | ${entry.focus || 'general'}`);
+  }
 }
 
 function handleTrainRollback(workspace, flags) {
@@ -4496,18 +4613,38 @@ function renderUpgradeSyncDoc(sourceText, report) {
   return `${String(sourceText || '').trimEnd()}\n\n${block}\n`;
 }
 
-function syncUpgradeMemory(workspace, report) {
+function syncUpgradeArtifacts(workspace, report, scope = {}) {
+  const writeDocs = scope.docs !== false;
+  const writeProfileDoc = scope.profileDoc !== false;
+  const writeProfileMemory = scope.profileMemory !== false;
+  const writeHostMemory = scope.hostMemory !== false;
   const profileName = workspace.activeProfileName;
-  const profileMemoryPath = path.join(workspace.repoRoot, workspace.profile?.memory?.profileMemory || `memory/profile/${profileName}.md`);
-  const profileMemoryText = renderUpgradeMemoryBlock('profile', profileName, report);
-  fs.mkdirSync(path.dirname(profileMemoryPath), { recursive: true });
-  fs.writeFileSync(profileMemoryPath, mergeUpgradeMemory(fs.existsSync(profileMemoryPath) ? fs.readFileSync(profileMemoryPath, 'utf8') : '', profileMemoryText), 'utf8');
+  if (writeDocs) {
+    const docsTargetPath = workspace.repoRoot && path.join(workspace.repoRoot, 'AGENTS.md');
+    if (docsTargetPath) {
+      const upgradedText = renderUpgradeSyncDoc(fs.existsSync(docsTargetPath) ? fs.readFileSync(docsTargetPath, 'utf8') : '', report);
+      fs.writeFileSync(docsTargetPath, upgradedText, 'utf8');
+    }
+  }
 
-  for (const host of report.hosts) {
-    const hostPath = resolveHostMemoryPath(workspace.repoRoot, host, 'host');
-    fs.mkdirSync(path.dirname(hostPath), { recursive: true });
-    const existing = fs.existsSync(hostPath) ? fs.readFileSync(hostPath, 'utf8') : '';
-    fs.writeFileSync(hostPath, mergeUpgradeMemory(existing, renderUpgradeMemoryBlock('host', host, report, host)), 'utf8');
+  if (writeProfileDoc && workspace.profileDocPath && fs.existsSync(workspace.profileDocPath)) {
+    fs.writeFileSync(workspace.profileDocPath, renderUpgradeSyncDoc(fs.readFileSync(workspace.profileDocPath, 'utf8'), report), 'utf8');
+  }
+
+  if (writeProfileMemory) {
+    const profileMemoryPath = path.join(workspace.repoRoot, workspace.profile?.memory?.profileMemory || `memory/profile/${profileName}.md`);
+    const profileMemoryText = renderUpgradeMemoryBlock('profile', profileName, report);
+    fs.mkdirSync(path.dirname(profileMemoryPath), { recursive: true });
+    fs.writeFileSync(profileMemoryPath, mergeUpgradeMemory(fs.existsSync(profileMemoryPath) ? fs.readFileSync(profileMemoryPath, 'utf8') : '', profileMemoryText), 'utf8');
+  }
+
+  if (writeHostMemory) {
+    for (const host of report.hosts) {
+      const hostPath = resolveHostMemoryPath(workspace.repoRoot, host, 'host');
+      fs.mkdirSync(path.dirname(hostPath), { recursive: true });
+      const existing = fs.existsSync(hostPath) ? fs.readFileSync(hostPath, 'utf8') : '';
+      fs.writeFileSync(hostPath, mergeUpgradeMemory(existing, renderUpgradeMemoryBlock('host', host, report, host)), 'utf8');
+    }
   }
   captureBrainFromUpgrade(workspace, report);
 }

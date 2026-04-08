@@ -94,3 +94,59 @@ test('upgrade is idempotent and replaces the existing sync block', () => {
     rmSync(workspace, { recursive: true, force: true });
   }
 });
+
+test('upgrade preview inspects the target without writing any sync blocks', () => {
+  const workspace = createWorkspace();
+  try {
+    writeFileSync(
+      path.join(workspace, 'AGENTS.md'),
+      `# Agent System
+
+## Agent 1 — The Scriptmaster
+- Owns logic.
+
+## Agent 2 — The UI Designer
+- Owns UI.
+`,
+      'utf8',
+    );
+
+    const result = runAgent(['upgrade', 'preview', '--host', 'qwen'], workspace);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /\[UPGRADE PREVIEW\]/);
+    assert.match(result.stdout, /Agents upgraded: 2/);
+    assert.equal(readFileSync(path.join(workspace, 'AGENTS.md'), 'utf8').includes('agent-system-upgrade-start'), false);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('upgrade memory scopes the sync to memory layers only', () => {
+  const workspace = createWorkspace();
+  try {
+    writeFileSync(
+      path.join(workspace, 'AGENTS.md'),
+      `# Agent System
+
+## Agent 1 — The Scriptmaster
+- Owns logic.
+`,
+      'utf8',
+    );
+
+    const result = runAgent(['upgrade', 'memory', '--host', 'qwen'], workspace);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /\[UPGRADE\]/);
+    assert.match(result.stdout, /Mode: memory/);
+
+    const agentsDoc = readFileSync(path.join(workspace, 'AGENTS.md'), 'utf8');
+    const profileMemory = readFileSync(path.join(workspace, 'memory', 'profile', 'imphub.md'), 'utf8');
+    const hostMemory = readFileSync(path.join(workspace, 'memory', 'host', 'qwen.md'), 'utf8');
+
+    assert.equal(agentsDoc.includes('agent-system-upgrade-start'), false);
+    assert.match(profileMemory, /Agent Upgrade Sync/);
+    assert.match(hostMemory, /Agent Upgrade Sync/);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});

@@ -20,6 +20,8 @@ This directory stores the automatic training loop for `agent-system`.
 - `train` writes the sync block in place instead of appending duplicates.
 - `train error` records prevention rules in the active host change memory.
 - `train replay` reuses the latest lesson without creating a second sync block.
+- `train status` summarizes the current training state, continuous state, and host pack snapshot.
+- `train history` prints recent host-scoped runs without mutating the training log.
 - `train explain` and `train compare` keep audit history separated by host.
 - `train packs` reports the host training pack once enough continuous cycles have been recorded.
 - `memory gate` can demote weak host lessons back into `memory/change/<host>.md` before promotion.

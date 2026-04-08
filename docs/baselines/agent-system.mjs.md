@@ -32,12 +32,16 @@
 - `change`, `train`, `eval`, `memory`, `upgrade`, and recovery flows auto-feed the structured brain layer.
 - `luau-train` and `luau-eval` force Luau focus when the user wants explicit Luau learning runs.
 - `train` auto-promotes durable lessons on successful runs, refreshes the host learning pack, and rewrites the continuous-training snapshot.
+- `train status` summarizes the current training state and continuous-training state without mutating any files.
+- `train history` prints recent host-scoped runs without mutating any files.
 - `train rollback` restores the latest host learning snapshot for the active host.
 - `train` and `memory` both write host recovery snapshots when the learning state changes enough to be rollback-worthy.
 - `train explain` and `train compare` emit per-host audit trails under `docs/training/explain/<host>.jsonl` and `docs/training/compare/<host>.jsonl`.
 - `train packs` reports or regenerates the host training pack after enough continuous cycles accumulate.
 - `memory gate` can demote weak host lessons into `memory/change/<host>.md` automatically when host memory is not ready.
 - `upgrade` owns multi-agent instruction upgrades plus profile and host memory synchronization.
+- `upgrade preview` and `upgrade status` inspect the upgrade target without writing files.
+- `upgrade docs`, `upgrade profile`, `upgrade memory`, and `upgrade hosts` scope the upgrade pass to a narrower set of docs and memory layers.
 - `train` owns multi-agent training sync, durable lesson capture, and the append-only training log.
 - `eval` owns simulation, scoring, comparison, and promotion of durable evaluation lessons.
 

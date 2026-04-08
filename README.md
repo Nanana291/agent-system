@@ -68,7 +68,7 @@ Short form:
 qwen extensions install Nanana291/agent-system
 ```
 
-## V0.6.1 scope
+## V0.6.2 scope
 
 This release keeps the structured second brain in place but tightens its materialization and reporting. `brain add`, `brain query`, `brain explain`, `brain promote`, `brain demote`, `brain prune`, `brain snapshot`, `brain restore`, `brain diff`, and `brain sync` still expose the knowledge layer between the model and the agents, now with more stable readback and clearer summaries.
 
@@ -130,6 +130,8 @@ node ./bin/agent-system.mjs brain restore --file ./brain-snapshot.json
 node ./bin/agent-system.mjs brain diff --file ./brain-snapshot.json
 node ./bin/agent-system.mjs brain sync
 node ./bin/agent-system.mjs train
+node ./bin/agent-system.mjs train status --host qwen
+node ./bin/agent-system.mjs train history --host qwen --limit 5
 node ./bin/agent-system.mjs luau-train
 node ./bin/agent-system.mjs train error --host qwen
 node ./bin/agent-system.mjs train replay --host qwen
@@ -168,6 +170,10 @@ node ./bin/agent-system.mjs memory capture change
 node ./bin/agent-system.mjs change memory-suggest
 node ./bin/agent-system.mjs quick-update bin/agent-system.mjs "prepare a fast update path for qwen"
 node ./bin/agent-system.mjs upgrade
+node ./bin/agent-system.mjs upgrade preview
+node ./bin/agent-system.mjs upgrade profile
+node ./bin/agent-system.mjs upgrade memory
+node ./bin/agent-system.mjs upgrade hosts
 node ./bin/agent-system.mjs backup ./agent-system-backup.json
 node ./bin/agent-system.mjs restore --file ./agent-system-backup.json
 node ./bin/agent-system.mjs bundle validate --file ./agent-system-backup.json
