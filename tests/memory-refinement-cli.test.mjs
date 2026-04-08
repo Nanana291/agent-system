@@ -102,3 +102,28 @@ test('memory reflect records a host-local lesson without crossing hosts', () => 
     rmSync(workspace, { recursive: true, force: true });
   }
 });
+
+test('memory gate auto-demotes weak host lessons into change memory', () => {
+  const workspace = createWorkspace();
+  try {
+    writeFileSync(
+      path.join(workspace, 'memory', 'host', 'qwen.md'),
+      '# Qwen Host Memory\n\n- Fix later.\n- Keep route fallback deterministic.\n',
+      'utf8',
+    );
+
+    const result = runMemory(['gate', '--host', 'qwen'], workspace);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /\[MEMORY GATE\]/);
+    assert.match(result.stdout, /Demoted:/);
+
+    const hostMemory = readFileSync(path.join(workspace, 'memory', 'host', 'qwen.md'), 'utf8');
+    const changeMemory = readFileSync(path.join(workspace, 'memory', 'change', 'qwen.md'), 'utf8');
+
+    assert.doesNotMatch(hostMemory, /Fix later\./);
+    assert.match(changeMemory, /Demoted lesson/);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});

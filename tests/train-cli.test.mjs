@@ -132,3 +132,62 @@ test('train auto-promotes repeated lessons and writes a continuous summary', () 
     rmSync(workspace, { recursive: true, force: true });
   }
 });
+
+test('train explain and compare keep history separated by host', () => {
+  const workspace = createWorkspace();
+  try {
+    const first = runAgent(['train', '--host', 'qwen'], workspace);
+    assert.equal(first.status, 0, first.stderr);
+    const second = runAgent(['train', '--host', 'qwen'], workspace);
+    assert.equal(second.status, 0, second.stderr);
+    const claude = runAgent(['train', '--host', 'claude'], workspace);
+    assert.equal(claude.status, 0, claude.stderr);
+
+    const explain = runAgent(['train', 'explain', '--host', 'qwen'], workspace);
+    assert.equal(explain.status, 0, explain.stderr);
+    assert.match(explain.stdout, /\[TRAIN EXPLAIN\]/);
+    assert.match(explain.stdout, /Host: qwen/);
+    assert.match(explain.stdout, /History: docs\/training\/explain\/qwen\.jsonl/);
+
+    const claudeExplain = runAgent(['train', 'explain', '--host', 'claude'], workspace);
+    assert.equal(claudeExplain.status, 0, claudeExplain.stderr);
+    assert.match(claudeExplain.stdout, /Host: claude/);
+    assert.match(claudeExplain.stdout, /History: docs\/training\/explain\/claude\.jsonl/);
+
+    const compare = runAgent(['train', 'compare', '--host', 'qwen'], workspace);
+    assert.equal(compare.status, 0, compare.stderr);
+    assert.match(compare.stdout, /\[TRAIN COMPARE\]/);
+    assert.match(compare.stdout, /Host: qwen/);
+    assert.match(compare.stdout, /History: docs\/training\/compare\/qwen\.jsonl/);
+
+    const qwenExplainHistory = readFileSync(path.join(workspace, 'docs', 'training', 'explain', 'qwen.jsonl'), 'utf8');
+    const claudeExplainHistory = readFileSync(path.join(workspace, 'docs', 'training', 'explain', 'claude.jsonl'), 'utf8');
+    const qwenCompareHistory = readFileSync(path.join(workspace, 'docs', 'training', 'compare', 'qwen.jsonl'), 'utf8');
+
+    assert.equal(qwenExplainHistory.trim().split(/\r?\n/).filter(Boolean).length >= 1, true);
+    assert.equal(claudeExplainHistory.trim().split(/\r?\n/).filter(Boolean).length >= 1, true);
+    assert.equal(qwenCompareHistory.trim().split(/\r?\n/).filter(Boolean).length >= 1, true);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('train generates a training pack after enough host cycles', () => {
+  const workspace = createWorkspace();
+  try {
+    const first = runAgent(['train', '--host', 'qwen'], workspace);
+    assert.equal(first.status, 0, first.stderr);
+    const second = runAgent(['train', '--host', 'qwen'], workspace);
+    assert.equal(second.status, 0, second.stderr);
+    const third = runAgent(['train', '--host', 'qwen'], workspace);
+    assert.equal(third.status, 0, third.stderr);
+
+    assert.match(third.stdout, /Training pack:/);
+    const packPath = path.join(workspace, 'docs', 'training', 'packs', 'qwen.md');
+    const packDoc = readFileSync(packPath, 'utf8');
+    assert.match(packDoc, /# Training Pack/);
+    assert.match(packDoc, /Host: qwen/);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});

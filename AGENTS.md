@@ -58,17 +58,19 @@ Durable rules should be written where they belong first, then kept inside the ho
 - `luau-explain` and `luau-diagnose` surface the Luau repair path and the issues that trigger it.
 - `luau-repair` applies multi-file Luau repairs, writes the repair snapshot, and syncs memory, docs, and AGENTS.
 - `luau-gate` validates the Luau repair snapshot before delivery.
+- `train explain` and `train compare` write host-separated audit trails in `docs/training/explain/<host>.jsonl` and `docs/training/compare/<host>.jsonl`.
+- `memory gate` can demote weak host lessons back into `memory/change/<host>.md` before promotion.
 - `train` and `eval` auto-detect Luau work or a ready Luau repair snapshot and write Luau-focused lessons into the training and evaluation logs.
 - `luau-train` and `luau-eval` force the Luau learning focus when you want to train or score Luau work directly.
 - `upgrade` applies multi-agent instruction upgrades and syncs the resulting memory into the active profile and all supported host memories.
 - `docs/training/current.json`, `docs/training/history.jsonl`, and `docs/training/<session>.md` record the automatic training loop.
 - `docs/training/continuous.json`, `docs/training/continuous-history.jsonl`, and `docs/training/continuous.md` record the continuous-training loop state.
-- `train`, `train error`, `train review`, `train replay`, `train promote`, and `train sync` train several agents at once, auto-promote durable lessons on successful runs, refresh the host learning pack, sync the active host memory, and write an auditable lesson trail.
+- `train`, `train error`, `train review`, `train replay`, `train promote`, `train sync`, `train explain`, `train compare`, and `train packs` train several agents at once, auto-promote durable lessons on successful runs, refresh the host learning pack, sync the active host memory, and write auditable lesson trails.
 - `docs/evals/current.json`, `docs/evals/history.jsonl`, and `docs/evals/<session>.md` record the evaluation loop.
 - `eval`, `eval simulate`, `eval score`, `eval compare`, and `eval promote` score the current workspace and promote durable lessons when the score clears the threshold.
 - `memory/change/<host>.md` stores auto-captured lessons from change gates before promotion into that same host's memory file.
 - `memory learn` auto-promotes repeated change lessons into the active host's memory file during a successful gate.
 
-## V0.5.7 intent
+## V0.5.8 intent
 
-This release turns `train` into a continuous improvement engine: successful cycles auto-promote durable lessons, refresh the host pack, and write a continuous-training snapshot so the last improvement pass is auditable without opening the full session log. The repo still keeps the portable recovery, training, evaluation, and Luau repair layers intact, and the Luau repair snapshot from `0.5.6` continues to feed training and evaluation automatically so repeated Luau work learns from the previous run.
+This release tightens training control by host: `train explain` and `train compare` keep host histories separated, `memory gate` can demote weak host lessons back into change memory, and continuous training now grows host training packs only after enough cycles accumulate. The repo still keeps the portable recovery, training, evaluation, and Luau repair layers intact, and the Luau repair snapshot from `0.5.6` continues to feed training and evaluation automatically so repeated Luau work learns from the previous run.

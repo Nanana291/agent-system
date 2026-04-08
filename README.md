@@ -67,15 +67,15 @@ Short form:
 qwen extensions install Nanana291/agent-system
 ```
 
-## V0.5.7 scope
+## V0.5.8 scope
 
-This release turns `train` into a continuous improvement engine. Every successful cycle now auto-promotes durable lessons, refreshes the host learning pack, and writes a continuous-training snapshot in `docs/training/` so the last improvement pass is auditable without opening the full session log.
+This release makes training control host-separated and more useful for day-to-day work. `train explain` and `train compare` now write their audit trails per host, `memory gate` can demote weak host lessons back into `memory/change/<host>.md`, and host training packs appear automatically once a host accumulates enough continuous cycles.
+
+`train` still acts as the continuous improvement engine. Successful cycles auto-promote durable lessons, refresh the host learning pack, and write a continuous-training snapshot in `docs/training/` so the last improvement pass is auditable without opening the full session log.
 
 The Luau repair loop from `0.5.6` remains in place: `luau-explain` explains the repair route and proof, `luau-diagnose` reports Luau-specific issues, `luau-repair` can repair multi-file Luau changes across code, config, docs, memory, and `AGENTS.md`, and `luau-gate` blocks incomplete repairs until the repair snapshot is ready.
 
-The Luau learning loop still reuses the repair snapshot automatically. `train` and `eval` auto-detect a completed Luau repair, write Luau-focused lessons into the training and evaluation logs, and sync those lessons into host memory so the next Luau run starts with repair-aware context.
-
-The earlier evaluation loop remains in place: the repository can still simulate a run, score it, compare it against the last evaluation, and promote the durable lessons into the active profile and host memories when the score clears the threshold. The Luau-specific aliases `luau-train` and `luau-eval` still expose the same loop directly when you want to force the focus.
+The Luau learning loop still reuses the repair snapshot automatically. `train` and `eval` auto-detect a completed Luau repair, write Luau-focused lessons into the training and evaluation logs, and sync those lessons into host memory so the next Luau run starts with repair-aware context. The Luau-specific aliases `luau-train` and `luau-eval` still expose the same loop directly when you want to force the focus.
 
 ## Memory layer
 
@@ -110,6 +110,7 @@ node ./bin/agent-system.mjs memory review --host qwen
 node ./bin/agent-system.mjs memory compress --host qwen
 node ./bin/agent-system.mjs memory teach --host qwen
 node ./bin/agent-system.mjs memory gate --host qwen
+node ./bin/agent-system.mjs memory demote --host qwen
 node ./bin/agent-system.mjs memory reflect --host qwen
 node ./bin/agent-system.mjs memory packs generate --host qwen
 node ./bin/agent-system.mjs memory packs list --host qwen
@@ -117,6 +118,9 @@ node ./bin/agent-system.mjs train
 node ./bin/agent-system.mjs luau-train
 node ./bin/agent-system.mjs train error --host qwen
 node ./bin/agent-system.mjs train replay --host qwen
+node ./bin/agent-system.mjs train explain --host qwen
+node ./bin/agent-system.mjs train compare --host qwen
+node ./bin/agent-system.mjs train packs --host qwen
 node ./bin/agent-system.mjs quick-fix --host qwen
 node ./bin/agent-system.mjs luau-quick --host qwen
 node ./bin/agent-system.mjs luau-explain --host qwen

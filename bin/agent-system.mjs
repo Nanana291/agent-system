@@ -825,6 +825,11 @@ function handleMemory(workspace, flags, positional) {
     return;
   }
 
+  if (action === 'demote') {
+    handleMemoryDemote(workspace, flags);
+    return;
+  }
+
   console.error(`Unknown memory action: ${action}`);
   process.exit(1);
 }
@@ -921,10 +926,13 @@ function handleMemoryTeach(workspace, flags) {
 function handleMemoryGate(workspace, flags) {
   const hostName = normalizeHostName(flags.host || workspace.activeHostName);
   const report = gateHostMemory(workspace.repoRoot, hostName);
+  const demoted = !report.ready ? demoteHostMemory(workspace.repoRoot, hostName) : { demoted: [], targetPath: resolveHostMemoryPath(workspace.repoRoot, hostName, 'change') };
   console.log('[MEMORY GATE]');
   console.log(`Host: ${hostName}`);
   console.log(`Ready: ${report.ready ? 'yes' : 'no'}`);
   console.log(`Reason: ${report.reason}`);
+  console.log(`Demoted: ${demoted.demoted.length}`);
+  console.log(`Change memory: ${path.relative(workspace.repoRoot, demoted.targetPath)}`);
 }
 
 function handleMemoryReflect(workspace, flags) {
@@ -935,6 +943,15 @@ function handleMemoryReflect(workspace, flags) {
   console.log('[MEMORY REFLECT]');
   console.log(`Host: ${hostName}`);
   console.log(`Wrote: ${path.relative(workspace.repoRoot, reflection.targetPath)}`);
+}
+
+function handleMemoryDemote(workspace, flags) {
+  const hostName = normalizeHostName(flags.host || workspace.activeHostName);
+  const report = demoteHostMemory(workspace.repoRoot, hostName);
+  console.log('[MEMORY DEMOTE]');
+  console.log(`Host: ${hostName}`);
+  console.log(`Demoted: ${report.demoted.length}`);
+  console.log(`Change memory: ${path.relative(workspace.repoRoot, report.targetPath)}`);
 }
 
 function handleLearningPacks(workspace, flags, positional) {
@@ -1022,6 +1039,19 @@ function reviewHostMemory(repoRoot, hostName) {
     }
   }
 
+  for (const entry of hostEntries) {
+    const text = stripBulletPrefix(entry);
+    if (!text) {
+      continue;
+    }
+    if (isWeakMemoryRule(text)) {
+      weak += 1;
+    }
+    if (hostEntries.filter((line) => normalizeMemoryBullet(line) === normalizeMemoryBullet(text)).length > 1) {
+      duplicates.push(text);
+    }
+  }
+
   return { weak, duplicates, candidates };
 }
 
@@ -1092,6 +1122,54 @@ function gateHostMemory(repoRoot, hostName) {
     ready,
     reason: ready ? 'host memory is compact and reusable' : 'host memory still has weak or uncompressed notes',
   };
+}
+
+function demoteHostMemory(repoRoot, hostName) {
+  const normalizedHost = normalizeHostName(hostName);
+  const hostPath = resolveHostMemoryPath(repoRoot, normalizedHost, 'host');
+  const changePath = resolveHostMemoryPath(repoRoot, normalizedHost, 'change');
+  ensureMemoryChangeFile(repoRoot, normalizedHost);
+  const current = readOptionalText(hostPath);
+  const lines = current.split(/\r?\n/);
+  const next = [];
+  const demoted = [];
+  const seen = new Set();
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('- ')) {
+      next.push(line);
+      continue;
+    }
+
+    const text = stripBulletPrefix(line);
+    const key = normalizeMemoryBullet(text);
+    if (!text) {
+      continue;
+    }
+    if (isWeakMemoryRule(text) || seen.has(key)) {
+      demoted.push(text);
+      continue;
+    }
+    seen.add(key);
+    next.push(line);
+  }
+
+  const preserved = next.filter((line) => line.trim().length > 0);
+  if (preserved.length === 0) {
+    preserved.push(`# ${humanize(normalizedHost)} Memory`);
+    preserved.push('');
+    preserved.push('- No durable lessons yet.');
+  } else if (preserved.every((line) => !line.trim().startsWith('- '))) {
+    preserved.push('');
+    preserved.push('- No durable lessons yet.');
+  }
+
+  fs.writeFileSync(hostPath, `${preserved.join('\n').trimEnd()}\n`, 'utf8');
+  for (const text of demoted) {
+    appendMemoryEntry(changePath, `Demoted lesson: ${text}`);
+  }
+  return { demoted, targetPath: changePath, hostPath };
 }
 
 function recordHostReflection(workspace, intake, report, hostName) {
@@ -1823,6 +1901,18 @@ function handleUpgrade(workspace, flags, positional) {
 
 function handleTrain(workspace, flags, positional) {
   const modeInput = positional[0];
+  if (modeInput === 'explain') {
+    handleTrainExplain(workspace, flags);
+    return;
+  }
+  if (modeInput === 'compare') {
+    handleTrainCompare(workspace, flags);
+    return;
+  }
+  if (modeInput === 'packs') {
+    handleTrainingPacks(workspace, flags);
+    return;
+  }
   const mode = normalizeTrainMode(modeInput);
   if (modeInput && mode !== modeInput.trim().toLowerCase()) {
     console.error(`Unknown train action: ${modeInput}`);
@@ -1844,6 +1934,9 @@ function handleTrain(workspace, flags, positional) {
   console.log(`Auto promotion: ${continuity.autoPromote ? 'yes' : 'no'}`);
   console.log(`Promoted lessons: ${continuity.promotions}`);
   console.log(`Continuous summary: ${path.relative(workspace.repoRoot, continuity.summaryPath)}`);
+  if (continuity.packGenerated) {
+    console.log(`Training pack: ${path.relative(workspace.repoRoot, continuity.packPath)}`);
+  }
   for (const agent of report.agents) {
     console.log(`- ${agent.title}`);
   }
@@ -2463,6 +2556,47 @@ function captureTrainingMemory(workspace, report) {
   }
 }
 
+function handleTrainExplain(workspace, flags) {
+  const hostName = normalizeHostName(flags.host || workspace.activeHostName);
+  const report = buildTrainingExplainReport(workspace, hostName);
+  writeTrainingHostAudit(workspace.repoRoot, 'explain', hostName, report, renderTrainingExplainDoc(report));
+  console.log('[TRAIN EXPLAIN]');
+  console.log(`Host: ${hostName}`);
+  console.log(`Reason: ${report.reason}`);
+  console.log(`History: ${path.relative(workspace.repoRoot, report.historyPath)}`);
+  console.log(`Current: ${path.relative(workspace.repoRoot, report.currentPath)}`);
+  if (report.trainingPackPath) {
+    console.log(`Training pack: ${path.relative(workspace.repoRoot, report.trainingPackPath)}`);
+  }
+  if (report.luauLesson) {
+    console.log(`Luau lesson: ${report.luauLesson}`);
+  }
+}
+
+function handleTrainCompare(workspace, flags) {
+  const hostName = normalizeHostName(flags.host || workspace.activeHostName);
+  const report = buildTrainingCompareReport(workspace, hostName);
+  writeTrainingHostAudit(workspace.repoRoot, 'compare', hostName, report, renderTrainingCompareDoc(report));
+  console.log('[TRAIN COMPARE]');
+  console.log(`Host: ${hostName}`);
+  console.log(`Compared runs: ${report.currentSession || 'baseline'} vs ${report.previousSession || 'baseline'}`);
+  console.log(`Delta: ${report.delta}`);
+  console.log(`History: ${path.relative(workspace.repoRoot, report.historyPath)}`);
+  if (report.trainingPackPath) {
+    console.log(`Training pack: ${path.relative(workspace.repoRoot, report.trainingPackPath)}`);
+  }
+}
+
+function handleTrainingPacks(workspace, flags) {
+  const hostName = normalizeHostName(flags.host || workspace.activeHostName);
+  const report = maybeGenerateTrainingPack(workspace.repoRoot, hostName);
+  console.log('[TRAIN PACKS]');
+  console.log(`Host: ${hostName}`);
+  console.log(`Generated: ${report.generated ? 'yes' : 'no'}`);
+  console.log(`Cycles: ${report.cycles}`);
+  console.log(`Pack: ${path.relative(workspace.repoRoot, report.path)}`);
+}
+
 function applyTrainingContinuity(workspace, report, hostName) {
   const autoPromote = report.mode !== 'error';
   const promotionReport = autoPromote
@@ -2492,6 +2626,8 @@ function applyTrainingContinuity(workspace, report, hostName) {
     luauLesson: report.luauLesson,
     hostMemoryPath: path.relative(workspace.repoRoot, resolveHostMemoryPath(workspace.repoRoot, hostName, 'host')),
     packPath: path.relative(workspace.repoRoot, resolveHostMemoryPath(workspace.repoRoot, hostName, 'packs')),
+    trainingPackPath: '',
+    trainingPackGenerated: false,
   };
 
   fs.mkdirSync(path.dirname(workspace.trainingContinuousPath), { recursive: true });
@@ -2505,10 +2641,20 @@ function applyTrainingContinuity(workspace, report, hostName) {
   };
   fs.appendFileSync(workspace.trainingContinuousHistoryPath, JSON.stringify(historyEntry) + '\n', 'utf8');
 
+  const packReport = maybeGenerateTrainingPack(workspace.repoRoot, hostName);
+  if (packReport.generated) {
+    current.trainingPackPath = path.relative(workspace.repoRoot, packReport.path);
+    current.trainingPackGenerated = true;
+    fs.writeFileSync(workspace.trainingContinuousPath, JSON.stringify(current, null, 2) + '\n', 'utf8');
+    fs.writeFileSync(workspace.trainingContinuousReadmePath, renderTrainingContinuousDoc(current), 'utf8');
+  }
+
   return {
     autoPromote,
     promotions: promotionReport.promoted,
     summaryPath: workspace.trainingContinuousReadmePath,
+    packGenerated: packReport.generated,
+    packPath: packReport.path,
   };
 }
 
@@ -2558,6 +2704,221 @@ function readTrainingContinuousHistory(workspace) {
     }
   }
   return entries;
+}
+
+function readTrainingContinuousCurrent(workspace) {
+  if (!fs.existsSync(workspace.trainingContinuousPath)) {
+    return {
+      kind: 'agent-system-training-continuity',
+      version: 1,
+      activeProfile: workspace.activeProfileName,
+      activeHost: workspace.activeHostName,
+      mode: 'success',
+      outcome: 'applied',
+      focus: 'general',
+      language: 'general',
+      generatedAt: '',
+      summaryPath: '',
+      continuityPath: '',
+      trainingHistory: '',
+      promotedMemory: 0,
+      promotions: [],
+      autoPromote: true,
+      luauLesson: '',
+      hostMemoryPath: '',
+      packPath: '',
+      trainingPackPath: '',
+      trainingPackGenerated: false,
+    };
+  }
+  try {
+    return readJson(workspace.trainingContinuousPath);
+  } catch {
+    return {
+      kind: 'agent-system-training-continuity',
+      version: 1,
+      activeProfile: workspace.activeProfileName,
+      activeHost: workspace.activeHostName,
+      mode: 'success',
+      outcome: 'applied',
+      focus: 'general',
+      language: 'general',
+      generatedAt: '',
+      summaryPath: '',
+      continuityPath: '',
+      trainingHistory: '',
+      promotedMemory: 0,
+      promotions: [],
+      autoPromote: true,
+      luauLesson: '',
+      hostMemoryPath: '',
+      packPath: '',
+      trainingPackPath: '',
+      trainingPackGenerated: false,
+    };
+  }
+}
+
+function buildTrainingExplainReport(workspace, hostName) {
+  const normalizedHost = normalizeHostName(hostName);
+  const current = readTrainingCurrent(workspace);
+  const continuous = readTrainingContinuousCurrent(workspace);
+  const history = readTrainingHistory(workspace).filter((entry) => normalizeHostName(entry.activeHost) === normalizedHost);
+  const continuousHistory = readTrainingContinuousHistory(workspace).filter((entry) => normalizeHostName(entry.activeHost) === normalizedHost);
+  const latest = history[history.length - 1] || current;
+  const latestContinuous = continuousHistory[continuousHistory.length - 1] || continuous;
+  const reason = latestContinuous.autoPromote
+    ? 'successful cycles auto-promote durable lessons and refresh the host pack'
+    : 'training is waiting for a successful cycle before auto-promotion';
+  return {
+    host: normalizedHost,
+    currentSession: latest.sessionId || '',
+    currentPath: workspace.trainingCurrentPath,
+    historyPath: path.join(workspace.repoRoot, 'docs', 'training', 'explain', `${normalizedHost}.jsonl`),
+    trainingPackPath: latestContinuous.trainingPackPath ? path.join(workspace.repoRoot, latestContinuous.trainingPackPath) : '',
+    reason,
+    autoPromote: Boolean(latestContinuous.autoPromote),
+    promotedMemory: latestContinuous.promotedMemory || 0,
+    luauLesson: latestContinuous.luauLesson || latest.luauLesson || '',
+    currentLesson: latest.lesson || '',
+    latestContinuous,
+    current,
+    continuous,
+  };
+}
+
+function buildTrainingCompareReport(workspace, hostName) {
+  const normalizedHost = normalizeHostName(hostName);
+  const history = readTrainingContinuousHistory(workspace).filter((entry) => normalizeHostName(entry.activeHost) === normalizedHost);
+  const current = history[history.length - 1] || null;
+  const previous = history[history.length - 2] || null;
+  const delta = current && previous
+    ? `promotedMemory ${previous.promotedMemory || 0} -> ${current.promotedMemory || 0}; autoPromote ${previous.autoPromote ? 'yes' : 'no'} -> ${current.autoPromote ? 'yes' : 'no'}`
+    : 'baseline only';
+  return {
+    host: normalizedHost,
+    currentSession: current?.generatedAt ? `${normalizedHost}-${current.generatedAt}` : '',
+    previousSession: previous?.generatedAt ? `${normalizedHost}-${previous.generatedAt}` : '',
+    historyPath: path.join(workspace.repoRoot, 'docs', 'training', 'compare', `${normalizedHost}.jsonl`),
+    trainingPackPath: current?.trainingPackPath ? path.join(workspace.repoRoot, current.trainingPackPath) : '',
+    delta,
+    current,
+    previous,
+  };
+}
+
+function renderTrainingExplainDoc(report) {
+  const lines = [];
+  lines.push('# Training Explain');
+  lines.push('');
+  lines.push(`- Host: ${report.host}`);
+  lines.push(`- Reason: ${report.reason}`);
+  lines.push(`- Auto promotion: ${report.autoPromote ? 'yes' : 'no'}`);
+  lines.push(`- Promoted lessons: ${report.promotedMemory}`);
+  lines.push(`- Current lesson: ${report.currentLesson || 'n/a'}`);
+  lines.push(`- Current training log: ${path.relative(process.cwd(), report.currentPath)}`);
+  if (report.trainingPackPath) {
+    lines.push(`- Training pack: ${path.relative(process.cwd(), report.trainingPackPath)}`);
+  }
+  if (report.luauLesson) {
+    lines.push('');
+    lines.push('## Luau Focus');
+    lines.push(`- ${report.luauLesson}`);
+  }
+  return lines.join('\n').trimEnd() + '\n';
+}
+
+function renderTrainingCompareDoc(report) {
+  const lines = [];
+  lines.push('# Training Compare');
+  lines.push('');
+  lines.push(`- Host: ${report.host}`);
+  lines.push(`- Current session: ${report.currentSession || 'baseline'}`);
+  lines.push(`- Previous session: ${report.previousSession || 'baseline'}`);
+  lines.push(`- Delta: ${report.delta}`);
+  if (report.trainingPackPath) {
+    lines.push(`- Training pack: ${path.relative(process.cwd(), report.trainingPackPath)}`);
+  }
+  return lines.join('\n').trimEnd() + '\n';
+}
+
+function writeTrainingHostAudit(repoRoot, kind, hostName, report, summaryText) {
+  const historyPath = path.join(repoRoot, 'docs', 'training', kind, `${hostName}.jsonl`);
+  const summaryPath = path.join(repoRoot, 'docs', 'training', kind, `${hostName}.md`);
+  fs.mkdirSync(path.dirname(historyPath), { recursive: true });
+  const entry = {
+    kind: `agent-system-training-${kind}`,
+    host: hostName,
+    generatedAt: new Date().toISOString(),
+    ...report,
+  };
+  fs.appendFileSync(historyPath, JSON.stringify(entry) + '\n', 'utf8');
+  fs.writeFileSync(summaryPath, summaryText, 'utf8');
+}
+
+function readTrainingContinuousHistoryFromRepo(repoRoot) {
+  const historyPath = path.join(repoRoot, 'docs', 'training', 'continuous-history.jsonl');
+  if (!fs.existsSync(historyPath)) {
+    return [];
+  }
+  const entries = [];
+  const lines = fs.readFileSync(historyPath, 'utf8').split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      entries.push(JSON.parse(trimmed));
+    } catch {
+      continue;
+    }
+  }
+  return entries;
+}
+
+function maybeGenerateTrainingPack(repoRoot, hostName, cycleCountOverride = null) {
+  const normalizedHost = normalizeHostName(hostName);
+  const history = readTrainingContinuousHistoryFromRepo(repoRoot).filter((entry) => normalizeHostName(entry.activeHost) === normalizedHost);
+  const cycles = Number.isFinite(cycleCountOverride) ? cycleCountOverride : history.length;
+  const packPath = path.join(repoRoot, 'docs', 'training', 'packs', `${normalizedHost}.md`);
+  const packDataPath = path.join(repoRoot, 'docs', 'training', 'packs', `${normalizedHost}.json`);
+  if (cycles < 3) {
+    return { generated: false, cycles, path: packPath };
+  }
+
+  const hostMemoryPath = resolveHostMemoryPath(repoRoot, normalizedHost, 'host');
+  const hostLessons = readMemoryBullets(hostMemoryPath).slice(-8);
+  const current = history[history.length - 1] || null;
+  const lines = [];
+  lines.push('# Training Pack');
+  lines.push('');
+  lines.push(`- Host: ${normalizedHost}`);
+  lines.push(`- Cycles: ${cycles}`);
+  lines.push(`- Generated: ${new Date().toISOString()}`);
+  lines.push(`- Current lesson: ${current?.luauLesson || current?.promotions?.[0] || 'n/a'}`);
+  lines.push('');
+  lines.push('## Durable Lessons');
+  if (hostLessons.length > 0) {
+    for (const lesson of hostLessons) {
+      lines.push(`- ${stripBulletPrefix(lesson)}`);
+    }
+  } else {
+    lines.push('- No durable lessons yet.');
+  }
+  lines.push('');
+  lines.push('## Continuous Cycles');
+  for (const cycle of history.slice(-5)) {
+    lines.push(`- ${cycle.mode}: promoted ${cycle.promotedMemory || 0} lesson(s)`);
+  }
+  fs.mkdirSync(path.dirname(packPath), { recursive: true });
+  fs.writeFileSync(packPath, lines.join('\n').trimEnd() + '\n', 'utf8');
+  fs.writeFileSync(packDataPath, JSON.stringify({
+    host: normalizedHost,
+    cycles,
+    generatedAt: new Date().toISOString(),
+    hostMemoryPath: path.relative(repoRoot, hostMemoryPath),
+    packPath: path.relative(repoRoot, packPath),
+  }, null, 2) + '\n', 'utf8');
+  return { generated: true, cycles, path: packPath };
 }
 
 function writeTrainingRecord(workspace, report) {
