@@ -72,7 +72,7 @@
     "luau-repair": "node ./bin/agent-system.mjs luau-repair",
     "luau-gate": "node ./bin/agent-system.mjs luau-gate",
     "train": "node ./bin/agent-system.mjs train",
-    "luau-train": "node ./bin/agent-system.mjs train --luau",
+    "luau-train": "node ./bin/agent-system.mjs luau-train",
     "upgrade-status": "node ./bin/agent-system.mjs upgrade status",
     "upgrade-apply": "node ./bin/upgrade-apply.mjs",
     "upgrade-sync": "node ./bin/upgrade-sync.mjs",
