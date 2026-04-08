@@ -44,6 +44,8 @@ test('memory review and compress stay inside the active host memory', () => {
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /\[MEMORY REVIEW\]/);
     assert.match(result.stdout, /Host: qwen/);
+    assert.match(result.stdout, /Duplicates:/);
+    assert.match(result.stdout, /Candidates:/);
     assert.match(result.stdout, /Duplicate lessons:/);
     assert.match(result.stdout, /Compression candidates:/);
   } finally {
@@ -63,11 +65,13 @@ test('memory teach and memory gate produce a compact host pack', () => {
     const gate = runMemory(['gate', '--host', 'claude'], workspace);
     assert.equal(gate.status, 0, gate.stderr);
     assert.match(gate.stdout, /\[MEMORY GATE\]/);
+    assert.match(gate.stdout, /Action:/);
 
     const teach = runMemory(['teach', '--host', 'claude'], workspace);
     assert.equal(teach.status, 0, teach.stderr);
     assert.match(teach.stdout, /\[MEMORY TEACH\]/);
     assert.match(teach.stdout, /memory\/host\/claude\.md/);
+    assert.match(teach.stdout, /Added:/);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }

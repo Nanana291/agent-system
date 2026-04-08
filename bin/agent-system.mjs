@@ -758,6 +758,7 @@ function handleValidate(workspace) {
   }
 
   console.log('Validation: FAILED');
+  console.log(`Issues: ${issues.length}`);
   for (const issue of issues) {
     console.log(`- ${issue}`);
   }
@@ -767,6 +768,7 @@ function handleValidate(workspace) {
 function handleLint(workspace) {
   const report = buildLintReport(workspace);
   console.log('Lint: ' + (report.ok ? 'OK' : 'FAILED'));
+  console.log(`Issues: ${report.items.length}`);
   for (const item of report.items) {
     console.log(`- ${item}`);
   }
@@ -1040,6 +1042,8 @@ function handleMemoryReview(workspace, flags) {
   console.log('[MEMORY REVIEW]');
   console.log(`Host: ${hostName}`);
   console.log(`Weak notes: ${report.weak}`);
+  console.log(`Duplicates: ${report.duplicates.length}`);
+  console.log(`Candidates: ${report.candidates.length}`);
   console.log('Duplicate lessons:');
   for (const line of report.duplicates) {
     console.log(`- ${line}`);
@@ -1067,6 +1071,7 @@ function handleMemoryTeach(workspace, flags) {
   console.log('[MEMORY TEACH]');
   console.log(`Host: ${hostName}`);
   console.log(`Wrote: ${path.relative(workspace.repoRoot, report.targetPath)}`);
+  console.log(`Added: ${report.added}`);
 }
 
 function handleMemoryGate(workspace, flags) {
@@ -1081,6 +1086,7 @@ function handleMemoryGate(workspace, flags) {
   console.log(`Host: ${hostName}`);
   console.log(`Ready: ${report.ready ? 'yes' : 'no'}`);
   console.log(`Reason: ${report.reason}`);
+  console.log(`Action: ${report.ready ? 'none' : 'compress -> teach -> gate again'}`);
   console.log(`Demoted: ${demoted.demoted.length}`);
   console.log(`Change memory: ${path.relative(workspace.repoRoot, demoted.targetPath)}`);
 }
@@ -1258,6 +1264,8 @@ function reviewHostMemory(repoRoot, hostName) {
   const counts = new Map();
   const duplicates = [];
   const candidates = [];
+  const duplicateKeys = new Set();
+  const candidateKeys = new Set();
   let weak = 0;
 
   for (const entry of changeEntries) {
@@ -1272,11 +1280,13 @@ function reviewHostMemory(repoRoot, hostName) {
       weak += 1;
       continue;
     }
-    if (count > 1) {
+    if (count > 1 && !duplicateKeys.has(key)) {
       duplicates.push(text);
+      duplicateKeys.add(key);
     }
-    if (count > 1 || !hostSet.has(key) || isUniversalMemoryRule(text)) {
+    if ((count > 1 || !hostSet.has(key) || isUniversalMemoryRule(text)) && !candidateKeys.has(key)) {
       candidates.push(text);
+      candidateKeys.add(key);
     }
     if (text.length < 20 || /maybe|todo|temp|unclear/i.test(text)) {
       weak += 1;
@@ -1291,8 +1301,9 @@ function reviewHostMemory(repoRoot, hostName) {
     if (isWeakMemoryRule(text)) {
       weak += 1;
     }
-    if (hostEntries.filter((line) => normalizeMemoryBullet(line) === normalizeMemoryBullet(text)).length > 1) {
+    if (hostEntries.filter((line) => normalizeMemoryBullet(line) === normalizeMemoryBullet(text)).length > 1 && !duplicateKeys.has(normalizeMemoryBullet(text))) {
       duplicates.push(text);
+      duplicateKeys.add(normalizeMemoryBullet(text));
     }
   }
 
@@ -1334,6 +1345,7 @@ function teachHostMemory(repoRoot, hostName) {
   const hostPath = resolveHostMemoryPath(repoRoot, normalizedHost, 'host');
   const review = reviewHostMemory(repoRoot, normalizedHost);
   const current = readOptionalText(hostPath);
+  const beforeBulletCount = readMemoryBullets(hostPath).length;
   const lines = current.split(/\r?\n/).filter((line) => line.trim().length > 0);
   const known = new Set(lines.map((line) => normalizeMemoryBullet(line)));
 
@@ -1355,7 +1367,7 @@ function teachHostMemory(repoRoot, hostName) {
 
   fs.mkdirSync(path.dirname(hostPath), { recursive: true });
   fs.writeFileSync(hostPath, `${lines.join('\n').trimEnd()}\n`, 'utf8');
-  return { targetPath: hostPath };
+  return { targetPath: hostPath, added: Math.max(0, lines.filter((line) => line.trim().startsWith('- ')).length - beforeBulletCount) };
 }
 
 function gateHostMemory(repoRoot, hostName) {
@@ -1365,6 +1377,7 @@ function gateHostMemory(repoRoot, hostName) {
   return {
     ready,
     reason: ready ? 'host memory is compact and reusable' : 'host memory still has weak or uncompressed notes',
+    review,
   };
 }
 
@@ -1807,7 +1820,6 @@ function normalizeBrainEntry(entry, workspace) {
   if (!entry || typeof entry !== 'object') {
     return null;
   }
-  const now = new Date().toISOString();
   const title = String(entry.title || entry.name || entry.summary || 'Brain lesson').trim();
   const summary = String(entry.summary || title).trim();
   const source = String(entry.source || entry.eventType || 'manual').trim().toLowerCase() || 'manual';
@@ -1817,6 +1829,9 @@ function normalizeBrainEntry(entry, workspace) {
   const brainId = String(entry.brainId || brainEntryId(title, scope, source)).trim();
   const host = normalizeHostName(entry.host || workspace.activeHostName);
   const profile = String(entry.profile || workspace.activeProfileName || 'imphub').trim();
+  const createdAt = String(entry.createdAt || entry.recordedAt || '').trim() || null;
+  const updatedAt = String(entry.updatedAt || entry.recordedAt || entry.createdAt || '').trim() || createdAt || new Date().toISOString();
+  const eventCount = Math.max(1, parseCount(entry.eventCount, 1));
   return {
     brainId,
     source,
@@ -1831,10 +1846,10 @@ function normalizeBrainEntry(entry, workspace) {
     evidence: String(entry.evidence || '').trim(),
     host,
     profile,
-    createdAt: entry.createdAt || now,
-    updatedAt: now,
-    eventCount: Math.max(1, parseCount(entry.eventCount, 0) + 1),
-    lastEvent: source,
+    createdAt,
+    updatedAt,
+    eventCount,
+    lastEvent: String(entry.lastEvent || source).trim() || source,
   };
 }
 
@@ -1849,7 +1864,7 @@ function mergeBrainEntries(existing, incoming) {
     facts: mergeUniqueStrings(existing.facts, incoming.facts),
     tags: mergeUniqueStrings(existing.tags, incoming.tags),
     relatedPaths: mergeUniqueStrings(existing.relatedPaths, incoming.relatedPaths),
-    lastEvent: incoming.source,
+    lastEvent: incoming.lastEvent || incoming.source,
   };
 }
 
@@ -4055,6 +4070,7 @@ function handleBrainQuery(workspace, flags, positional) {
   const report = queryBrainEntries(workspace, query, { explain: false });
   console.log('[BRAIN QUERY]');
   console.log(`Query: ${query}`);
+  console.log(`Scope: ${flags.scope || 'all'}`);
   console.log(`Hits: ${report.matches.length}`);
   for (const match of report.matches) {
     console.log(`- [${match.status}] ${match.title} (${match.scope}, ${match.source}, ${match.confidence})`);
@@ -4071,6 +4087,7 @@ function handleBrainExplain(workspace, flags, positional) {
   const report = queryBrainEntries(workspace, query, { explain: true });
   console.log('[BRAIN EXPLAIN]');
   console.log(`Query: ${query}`);
+  console.log(`Scope: ${flags.scope || 'all'}`);
   console.log(`Hits: ${report.matches.length}`);
   for (const match of report.matches) {
     console.log(`- [${match.status}] ${match.title} (${match.scope}, ${match.source}, ${match.confidence})`);
@@ -4200,6 +4217,7 @@ function handleBrainSync(workspace) {
   console.log(`Host: ${current.activeHost}`);
   console.log(`Profile: ${current.activeProfile}`);
   console.log(`Entries: ${current.counts.total}`);
+  console.log(`Status counts: active=${current.counts.active}, candidate=${current.counts.candidate}, demoted=${current.counts.demoted}, archived=${current.counts.archived}`);
 }
 
 function handleBrainList(workspace, flags, positional) {
@@ -5229,7 +5247,7 @@ function pruneMemory(repoRoot) {
         continue;
       }
       if (normalized.startsWith('- ')) {
-        const key = normalized.toLowerCase();
+        const key = normalizeMemoryBullet(normalized);
         if (seen.has(key)) {
           pruned += 1;
           continue;

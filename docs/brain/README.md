@@ -14,4 +14,4 @@ This directory stores the structured second brain for `agent-system`.
 - `brain query` and `brain explain` read the current brain without mutating it.
 - `brain snapshot`, `brain restore`, and `brain diff` support portable recovery.
 - Training, eval, change, upgrade, recovery, and memory flows feed the brain automatically.
-
+- The materialized brain should stay stable across repeated reads so snapshots, diffs, and explanations do not churn on timestamps alone.

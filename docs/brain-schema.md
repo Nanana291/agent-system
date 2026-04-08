@@ -15,6 +15,8 @@ The brain is event-sourced.
 - `counts`
 - `entries[]`
 
+The current brain should preserve the timestamps and counters from the last real event so repeated reads do not create artificial churn.
+
 ## Event Log
 
 `docs/brain/history.jsonl` appends:
@@ -51,4 +53,3 @@ The brain is event-sourced.
 - `counts`
 - `current`
 - `history`
-

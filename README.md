@@ -68,15 +68,15 @@ Short form:
 qwen extensions install Nanana291/agent-system
 ```
 
-## V0.6.0 scope
+## V0.6.1 scope
 
-This release adds a structured second brain. `brain add`, `brain query`, `brain explain`, `brain promote`, `brain demote`, `brain prune`, `brain snapshot`, `brain restore`, `brain diff`, and `brain sync` expose a materialized knowledge layer that sits between the model and the agents.
+This release keeps the structured second brain in place but tightens its materialization and reporting. `brain add`, `brain query`, `brain explain`, `brain promote`, `brain demote`, `brain prune`, `brain snapshot`, `brain restore`, `brain diff`, and `brain sync` still expose the knowledge layer between the model and the agents, now with more stable readback and clearer summaries.
 
-The brain is event-sourced and automatically fed by `change`, `train`, `eval`, `memory`, `upgrade`, and recovery flows. Durable lessons are captured into `docs/brain/current.json` and `docs/brain/history.jsonl`, then synchronized into host and profile memory as they stabilize.
+The brain is still event-sourced and fed by `change`, `train`, `eval`, `memory`, `upgrade`, and recovery flows. Durable lessons continue to land in `docs/brain/current.json` and `docs/brain/history.jsonl`, then sync into host and profile memory once they stabilize, but the read path now avoids noisy timestamp churn so the materialized state is easier to trust.
 
 Learning recovery still exists: `memory snapshot`, `memory restore`, `memory diff`, `memory rollback`, and `train rollback` preserve host learning state as a recoverable snapshot. Training packs remain versioned, host histories stay separated, and Luau repair / Luau learning still feed the training loop automatically.
 
-`train` remains the continuous improvement engine. Successful cycles auto-promote durable lessons, refresh the host learning pack, write a continuous-training snapshot in `docs/training/`, and now also leave a structured brain trace so the same lesson can be retrieved, explained, or promoted later without re-deriving it from raw session logs.
+`train` remains the continuous improvement engine. Successful cycles still auto-promote durable lessons, refresh the host learning pack, write a continuous-training snapshot in `docs/training/`, and leave a structured brain trace so the same lesson can be retrieved, explained, or promoted later without re-deriving it from raw session logs.
 
 ## Memory layer
 

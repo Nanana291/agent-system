@@ -28,3 +28,4 @@ This directory stores the automatic training loop for `agent-system`.
 - Luau repair snapshots automatically feed `train` with Luau context after `luau-repair` runs.
 - Successful `train` cycles auto-promote durable lessons, refresh the host learning pack, and rewrite the continuous-training snapshot.
 - Successful `train` cycles also feed the second brain so the same lesson can be queried, explained, or promoted later without rebuilding it from raw logs.
+- The training summary should stay readable even when the brain and memory layers stabilize or compress entries more aggressively.

@@ -10,13 +10,16 @@
 
 - `validate` checks the active profile, status files, change files, brain files, training logs, training continuity files, host learning recovery snapshots, per-host training explain/compare histories, evaluation logs, backup schema, quick-update flow, quick-fix flow, luau-quick flow, luau repair flow, upgrade flow, and host memory layout.
 - `lint` enforces manifest consistency, memory drift checks, brain presence, status presence, change presence, pack presence, training presence, training continuity presence, recovery presence, host training audit presence, evaluation presence, backup schema presence, quick-update coverage, quick-fix coverage, luau-quick coverage, luau-repair coverage, upgrade coverage, and training coverage.
+- `validate` and `lint` should keep their current contract but surface clearer path-by-path failure messages when a file or schema is missing.
 - `status` owns presence, heartbeat, and session attachment.
 - `memory` owns review, compress, teach, gate, reflect, learning pack generation, and host learning recovery per host.
+- `memory review`, `memory compress`, `memory teach`, `memory gate`, `memory prune`, and `memory learn` should stay host-local while filtering weaker or duplicate notes more conservatively.
 - `memory demote` owns weak host lesson removal and change-memory fallback for the active host.
 - `memory snapshot`, `memory restore`, `memory diff`, and `memory rollback` own host learning recovery snapshots.
 - `change` owns intake analysis, scaffold generation, preview/apply, rollback, and gate validation.
 - `backup`, `restore`, and `bundle` own portable snapshot capture, validation, diffing, and pruning.
 - `brain` owns the structured second brain, current materialization, event history, snapshots, diffing, and recovery.
+- `brain` should preserve stable current materialization across repeated reads so diff and snapshot flows are not driven by timestamp churn.
 - `quick-update` owns fast update intake preparation from target and intent without git-diff dependence.
 - `quick-fix` owns single-file code/config fixes with a fast lock, fast gate, and quick memory capture.
 - `luau-quick` owns single-file Luau fixes with a Luau-specific lock, gate, and memory note.

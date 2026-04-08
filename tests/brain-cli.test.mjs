@@ -54,6 +54,11 @@ test('brain add/query/explain/snapshot/restore/sync manage the structured brain 
     assert.match(snapshot.stdout, /\[BRAIN SNAPSHOT\]/);
     assert.equal(existsSync(snapshotPath), true);
 
+    const diffBeforeChange = runAgent(['brain', 'diff', '--file', snapshotPath], workspace);
+    assert.equal(diffBeforeChange.status, 0, diffBeforeChange.stderr);
+    assert.match(diffBeforeChange.stdout, /\[BRAIN DIFF\]/);
+    assert.match(diffBeforeChange.stdout, /Changed: 0/);
+
     const demote = runAgent(['brain', 'demote', 'fallback'], workspace);
     assert.equal(demote.status, 0, demote.stderr);
     assert.match(demote.stdout, /\[BRAIN DEMOTE\]/);
@@ -71,6 +76,7 @@ test('brain add/query/explain/snapshot/restore/sync manage the structured brain 
     const sync = runAgent(['brain', 'sync'], workspace);
     assert.equal(sync.status, 0, sync.stderr);
     assert.match(sync.stdout, /\[BRAIN SYNC\]/);
+    assert.match(sync.stdout, /Status counts:/);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }
