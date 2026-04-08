@@ -1,6 +1,6 @@
 {
   "name": "agent-system",
-  "version": "0.5.9",
+  "version": "0.6.0",
   "schemaVersion": 1,
   "purpose": "Universal route, ownership, handoff, and delivery-gate scaffold that complements Superpowers.",
   "superpowersIntegration": {
@@ -25,6 +25,7 @@
     "templates": "templates",
     "docs": "docs",
     "luau": "docs/luau",
+    "brain": "docs/brain",
     "memory": "memory",
     "status": "status",
     "change": "change",
@@ -87,6 +88,13 @@
     "continuousHistory": "docs/training/continuous-history.jsonl",
     "continuousReadme": "docs/training/continuous.md",
     "recovery": "docs/training/recovery"
+  },
+  "brain": {
+    "current": "docs/brain/current.json",
+    "history": "docs/brain/history.jsonl",
+    "readme": "docs/brain/README.md",
+    "schema": "docs/brain-schema.md",
+    "snapshots": "docs/brain/snapshots"
   },
   "eval": {
     "current": "docs/evals/current.json",

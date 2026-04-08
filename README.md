@@ -20,6 +20,7 @@ Superpowers decides how to work: brainstorming, planning, debugging, or test-dri
 - `profiles/<profile>/AGENTS.md` is the human-readable companion for that profile.
 - `commands/`, `skills/`, `agents/`, and `templates/` provide the shared orchestration surface.
 - `adapters/` holds host-specific bootstrap notes for Claude Code, Codex, and Qwen Code.
+- `docs/brain/` stores the structured second brain that collects durable lessons from change, train, eval, memory, upgrade, and recovery flows.
 
 ## Supported hosts
 
@@ -67,17 +68,15 @@ Short form:
 qwen extensions install Nanana291/agent-system
 ```
 
-## V0.5.9 scope
+## V0.6.0 scope
 
-This release adds learning recovery. `memory snapshot`, `memory restore`, `memory diff`, and `memory rollback` now preserve host learning state as a recoverable snapshot, and `train rollback` can restore the latest snapshot for the active host. Training packs are versioned, so the host learning surface can be audited and rolled back without guessing what changed.
+This release adds a structured second brain. `brain add`, `brain query`, `brain explain`, `brain promote`, `brain demote`, `brain prune`, `brain snapshot`, `brain restore`, `brain diff`, and `brain sync` expose a materialized knowledge layer that sits between the model and the agents.
 
-`train explain` and `train compare` still write host-separated audit trails, `memory gate` can demote weak host lessons back into `memory/change/<host>.md`, and host training packs still appear automatically once a host accumulates enough continuous cycles.
+The brain is event-sourced and automatically fed by `change`, `train`, `eval`, `memory`, `upgrade`, and recovery flows. Durable lessons are captured into `docs/brain/current.json` and `docs/brain/history.jsonl`, then synchronized into host and profile memory as they stabilize.
 
-`train` still acts as the continuous improvement engine. Successful cycles auto-promote durable lessons, refresh the host learning pack, and write a continuous-training snapshot in `docs/training/` so the last improvement pass is auditable without opening the full session log. Successful training and memory recovery passes now also capture a host recovery snapshot so rollback has a stable target.
+Learning recovery still exists: `memory snapshot`, `memory restore`, `memory diff`, `memory rollback`, and `train rollback` preserve host learning state as a recoverable snapshot. Training packs remain versioned, host histories stay separated, and Luau repair / Luau learning still feed the training loop automatically.
 
-The Luau repair loop from `0.5.6` remains in place: `luau-explain` explains the repair route and proof, `luau-diagnose` reports Luau-specific issues, `luau-repair` can repair multi-file Luau changes across code, config, docs, memory, and `AGENTS.md`, and `luau-gate` blocks incomplete repairs until the repair snapshot is ready.
-
-The Luau learning loop still reuses the repair snapshot automatically. `train` and `eval` auto-detect a completed Luau repair, write Luau-focused lessons into the training and evaluation logs, and sync those lessons into host memory so the next Luau run starts with repair-aware context. The Luau-specific aliases `luau-train` and `luau-eval` still expose the same loop directly when you want to force the focus.
+`train` remains the continuous improvement engine. Successful cycles auto-promote durable lessons, refresh the host learning pack, write a continuous-training snapshot in `docs/training/`, and now also leave a structured brain trace so the same lesson can be retrieved, explained, or promoted later without re-deriving it from raw session logs.
 
 ## Memory layer
 
@@ -120,6 +119,16 @@ node ./bin/agent-system.mjs memory rollback --host qwen
 node ./bin/agent-system.mjs memory reflect --host qwen
 node ./bin/agent-system.mjs memory packs generate --host qwen
 node ./bin/agent-system.mjs memory packs list --host qwen
+node ./bin/agent-system.mjs brain add --host qwen "Keep route fallback deterministic."
+node ./bin/agent-system.mjs brain query fallback
+node ./bin/agent-system.mjs brain explain "Luau hot-path safety"
+node ./bin/agent-system.mjs brain promote fallback
+node ./bin/agent-system.mjs brain demote fallback
+node ./bin/agent-system.mjs brain prune
+node ./bin/agent-system.mjs brain snapshot ./brain-snapshot.json
+node ./bin/agent-system.mjs brain restore --file ./brain-snapshot.json
+node ./bin/agent-system.mjs brain diff --file ./brain-snapshot.json
+node ./bin/agent-system.mjs brain sync
 node ./bin/agent-system.mjs train
 node ./bin/agent-system.mjs luau-train
 node ./bin/agent-system.mjs train error --host qwen

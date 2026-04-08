@@ -44,6 +44,8 @@ Durable rules should be written where they belong first, then kept inside the ho
 - `status watch` renders live presence lines for terminal use.
 - `status heartbeat`, `status who`, and `status attach` extend the presence layer into a simple session tracker.
 - The canonical human-facing format is `[AGENT] <name> | <action> | <elapsed>`.
+- `docs/brain/current.json`, `docs/brain/history.jsonl`, and `docs/brain/snapshots/` store the structured second brain and its recoverable snapshots.
+- `brain add`, `brain query`, `brain explain`, `brain promote`, `brain demote`, `brain prune`, `brain snapshot`, `brain restore`, `brain diff`, and `brain sync` manage the second brain layer.
 - `backup` captures the full mutable workspace into one portable bundle.
 - `restore` writes a validated backup bundle back into the workspace and then runs post-restore validation.
 - `bundle validate`, `bundle diff`, and `bundle prune` inspect or clean backup bundles without touching live state.
@@ -74,6 +76,6 @@ Durable rules should be written where they belong first, then kept inside the ho
 - `memory/change/<host>.md` stores auto-captured lessons from change gates before promotion into that same host's memory file.
 - `memory learn` auto-promotes repeated change lessons into the active host's memory file during a successful gate.
 
-## V0.5.9 intent
+## V0.6.0 intent
 
-This release adds host learning recovery: `memory snapshot`, `memory restore`, `memory diff`, `memory rollback`, and `train rollback` let the repo recover the active host learning surface after a bad pass. Training packs are versioned, host histories stay separated, and the Luau repair snapshot from `0.5.6` continues to feed training and evaluation automatically so repeated Luau work learns from the previous run.
+This release adds a structured second brain between the model and the agents. `brain add`, `brain query`, `brain explain`, `brain promote`, `brain demote`, `brain prune`, `brain snapshot`, `brain restore`, `brain diff`, and `brain sync` let the repo capture, explain, and recover durable knowledge automatically from change, train, eval, memory, upgrade, and recovery flows.

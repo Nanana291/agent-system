@@ -1,0 +1,19 @@
+{
+  "kind": "agent-system-brain",
+  "brainVersion": 1,
+  "activeProfile": "imphub",
+  "activeHost": "qwen",
+  "generatedAt": "",
+  "updatedAt": "",
+  "counts": {
+    "total": 0,
+    "active": 0,
+    "candidate": 0,
+    "demoted": 0,
+    "archived": 0,
+    "byScope": {},
+    "bySource": {}
+  },
+  "entries": []
+}
+

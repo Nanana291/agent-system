@@ -4,18 +4,19 @@
 
 - Path: `bin/agent-system.mjs`
 - Role: universal orchestration CLI
-- Focus: validation, routing, memory, status, and change workflow support
+- Focus: validation, routing, memory, brain, status, and change workflow support
 
 ## Current Baseline Notes
 
-- `validate` checks the active profile, status files, change files, training logs, training continuity files, host learning recovery snapshots, per-host training explain/compare histories, evaluation logs, backup schema, quick-update flow, quick-fix flow, luau-quick flow, luau repair flow, upgrade flow, and host memory layout.
-- `lint` enforces manifest consistency, memory drift checks, status presence, change presence, pack presence, training presence, training continuity presence, recovery presence, host training audit presence, evaluation presence, backup schema presence, quick-update coverage, quick-fix coverage, luau-quick coverage, luau-repair coverage, upgrade coverage, and training coverage.
+- `validate` checks the active profile, status files, change files, brain files, training logs, training continuity files, host learning recovery snapshots, per-host training explain/compare histories, evaluation logs, backup schema, quick-update flow, quick-fix flow, luau-quick flow, luau repair flow, upgrade flow, and host memory layout.
+- `lint` enforces manifest consistency, memory drift checks, brain presence, status presence, change presence, pack presence, training presence, training continuity presence, recovery presence, host training audit presence, evaluation presence, backup schema presence, quick-update coverage, quick-fix coverage, luau-quick coverage, luau-repair coverage, upgrade coverage, and training coverage.
 - `status` owns presence, heartbeat, and session attachment.
 - `memory` owns review, compress, teach, gate, reflect, learning pack generation, and host learning recovery per host.
 - `memory demote` owns weak host lesson removal and change-memory fallback for the active host.
 - `memory snapshot`, `memory restore`, `memory diff`, and `memory rollback` own host learning recovery snapshots.
 - `change` owns intake analysis, scaffold generation, preview/apply, rollback, and gate validation.
 - `backup`, `restore`, and `bundle` own portable snapshot capture, validation, diffing, and pruning.
+- `brain` owns the structured second brain, current materialization, event history, snapshots, diffing, and recovery.
 - `quick-update` owns fast update intake preparation from target and intent without git-diff dependence.
 - `quick-fix` owns single-file code/config fixes with a fast lock, fast gate, and quick memory capture.
 - `luau-quick` owns single-file Luau fixes with a Luau-specific lock, gate, and memory note.
@@ -25,6 +26,7 @@
 - `luau-gate` validates the Luau repair snapshot before delivery.
 - `train` auto-detects Luau work and writes Luau-focused lessons into the training log when the active change or repair snapshot is Luau-aware.
 - `eval` auto-detects Luau work and writes Luau-focused lessons into the evaluation log when the active change or repair snapshot is Luau-aware.
+- `change`, `train`, `eval`, `memory`, `upgrade`, and recovery flows auto-feed the structured brain layer.
 - `luau-train` and `luau-eval` force Luau focus when the user wants explicit Luau learning runs.
 - `train` auto-promotes durable lessons on successful runs, refreshes the host learning pack, and rewrites the continuous-training snapshot.
 - `train rollback` restores the latest host learning snapshot for the active host.

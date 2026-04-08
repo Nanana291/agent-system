@@ -92,6 +92,9 @@ async function main() {
     case 'memory':
       handleMemory(workspace, flags, positional);
       return;
+    case 'brain':
+      handleBrain(workspace, flags, positional);
+      return;
     case 'memory-search':
       handleMemorySearch(workspace, positional);
       return;
@@ -109,6 +112,36 @@ async function main() {
       return;
     case 'memory-learn':
       handleMemoryLearn(workspace, flags);
+      return;
+    case 'brain-add':
+      handleBrainAdd(workspace, flags, positional);
+      return;
+    case 'brain-query':
+      handleBrainQuery(workspace, flags, positional);
+      return;
+    case 'brain-explain':
+      handleBrainExplain(workspace, flags, positional);
+      return;
+    case 'brain-promote':
+      handleBrainPromote(workspace, flags, positional);
+      return;
+    case 'brain-demote':
+      handleBrainDemote(workspace, flags, positional);
+      return;
+    case 'brain-prune':
+      handleBrainPrune(workspace);
+      return;
+    case 'brain-snapshot':
+      handleBrainSnapshot(workspace, flags, positional);
+      return;
+    case 'brain-restore':
+      handleBrainRestore(workspace, flags, positional);
+      return;
+    case 'brain-diff':
+      handleBrainDiff(workspace, flags, positional);
+      return;
+    case 'brain-sync':
+      handleBrainSync(workspace);
       return;
     case 'backup':
       handleBackup(workspace, flags, positional);
@@ -190,6 +223,54 @@ function parseArgs(argv) {
     }
     if (arg === '--name') {
       flags.name = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--title') {
+      flags.title = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--summary') {
+      flags.summary = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--source') {
+      flags.source = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--status') {
+      flags.status = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--confidence') {
+      flags.confidence = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--fact') {
+      flags.fact = flags.fact || [];
+      flags.fact.push(argv[i + 1]);
+      i += 1;
+      continue;
+    }
+    if (arg === '--tag') {
+      flags.tag = flags.tag || [];
+      flags.tag.push(argv[i + 1]);
+      i += 1;
+      continue;
+    }
+    if (arg === '--path') {
+      flags.path = flags.path || [];
+      flags.path.push(argv[i + 1]);
+      i += 1;
+      continue;
+    }
+    if (arg === '--reason') {
+      flags.reason = argv[i + 1];
       i += 1;
       continue;
     }
@@ -339,6 +420,17 @@ function printHelp() {
     '    restore  Restore the active host learning state from a snapshot',
     '    diff     Compare the active host learning state against a snapshot',
     '    rollback Restore the latest active host learning snapshot',
+    '  brain     Query and manage the structured second brain',
+    '    add      Add a structured brain entry',
+    '    query    Search the brain for matching knowledge',
+    '    explain  Explain why a brain entry matched',
+    '    promote  Promote a brain entry to a stronger scope',
+    '    demote   Demote a brain entry to a weaker scope',
+    '    prune    Rebuild the brain index and drop duplicate noise',
+    '    snapshot Capture the current brain state',
+    '    restore  Restore the brain from a snapshot',
+    '    diff     Compare the current brain state against a snapshot',
+    '    sync     Rebuild the materialized brain index',
     '  backup    Snapshot the current mutable workspace state',
     '  restore   Restore a previously captured backup snapshot',
     '  bundle    Validate, diff, or prune backup bundles',
@@ -412,11 +504,18 @@ function loadWorkspace(profileName, hostName) {
   const trainingContinuousPath = path.join(repoRoot, manifest.training?.continuous || 'docs/training/continuous.json');
   const trainingContinuousHistoryPath = path.join(repoRoot, manifest.training?.continuousHistory || 'docs/training/continuous-history.jsonl');
   const trainingContinuousReadmePath = path.join(repoRoot, manifest.training?.continuousReadme || 'docs/training/continuous.md');
+  const trainingRecoveryDir = path.join(repoRoot, manifest.training?.recovery || 'docs/training/recovery');
   const evalDir = path.join(repoRoot, manifest.paths?.evals || 'docs/evals');
   const evalCurrentPath = path.join(repoRoot, manifest.eval?.current || 'docs/evals/current.json');
   const evalHistoryPath = path.join(repoRoot, manifest.eval?.history || 'docs/evals/history.jsonl');
   const evalReadmePath = path.join(repoRoot, manifest.eval?.readme || 'docs/evals/README.md');
   const evalSchemaPath = path.join(repoRoot, manifest.eval?.schema || 'docs/evals-schema.md');
+  const brainDir = path.join(repoRoot, manifest.paths?.brain || 'docs/brain');
+  const brainCurrentPath = path.join(repoRoot, manifest.brain?.current || 'docs/brain/current.json');
+  const brainHistoryPath = path.join(repoRoot, manifest.brain?.history || 'docs/brain/history.jsonl');
+  const brainReadmePath = path.join(repoRoot, manifest.brain?.readme || 'docs/brain/README.md');
+  const brainSchemaPath = path.join(repoRoot, manifest.brain?.schema || 'docs/brain-schema.md');
+  const brainSnapshotsDir = path.join(repoRoot, manifest.brain?.snapshots || 'docs/brain/snapshots');
   const changeMemoryPath = resolveHostMemoryPath(repoRoot, activeHostName, 'change');
   const hostMemoryPath = resolveHostMemoryPath(repoRoot, activeHostName, 'host');
   const packMemoryPath = resolveHostMemoryPath(repoRoot, activeHostName, 'packs');
@@ -447,11 +546,18 @@ function loadWorkspace(profileName, hostName) {
     trainingContinuousPath,
     trainingContinuousHistoryPath,
     trainingContinuousReadmePath,
+    trainingRecoveryDir,
     evalDir,
     evalCurrentPath,
     evalHistoryPath,
     evalReadmePath,
     evalSchemaPath,
+    brainDir,
+    brainCurrentPath,
+    brainHistoryPath,
+    brainReadmePath,
+    brainSchemaPath,
+    brainSnapshotsDir,
     changeMemoryPath,
     hostMemoryPath,
     packMemoryPath,
@@ -503,6 +609,7 @@ function handleValidate(workspace) {
   const issues = [];
   const { repoRoot, manifest, profile, profilePath, profileDocPath, statusCurrentPath, statusEventsPath, changeCurrentPath, changeHistoryPath, changeReadmePath, changeSchemaPath, changeTemplatePath, changeMemoryPath, trainingCurrentPath, trainingHistoryPath, trainingReadmePath, trainingSchemaPath, evalCurrentPath, evalHistoryPath, evalReadmePath, evalSchemaPath } = workspace;
   const { trainingContinuousPath, trainingContinuousHistoryPath, trainingContinuousReadmePath } = workspace;
+  const { brainCurrentPath, brainHistoryPath, brainReadmePath, brainSchemaPath } = workspace;
   const luauReadmePath = path.join(repoRoot, 'docs', 'luau', 'README.md');
   const luauCurrentPath = path.join(repoRoot, 'docs', 'luau', 'current.json');
   const luauHistoryPath = path.join(repoRoot, 'docs', 'luau', 'history.jsonl');
@@ -586,6 +693,18 @@ function handleValidate(workspace) {
   }
   if (!fs.existsSync(trainingContinuousReadmePath)) {
     issues.push(`missing training continuity readme: ${path.relative(repoRoot, trainingContinuousReadmePath)}`);
+  }
+  if (!fs.existsSync(brainReadmePath)) {
+    issues.push(`missing brain readme: ${path.relative(repoRoot, brainReadmePath)}`);
+  }
+  if (!fs.existsSync(brainSchemaPath)) {
+    issues.push(`missing brain schema: ${path.relative(repoRoot, brainSchemaPath)}`);
+  }
+  if (!fs.existsSync(brainCurrentPath)) {
+    issues.push(`missing brain current snapshot: ${path.relative(repoRoot, brainCurrentPath)}`);
+  }
+  if (!fs.existsSync(brainHistoryPath)) {
+    issues.push(`missing brain history log: ${path.relative(repoRoot, brainHistoryPath)}`);
   }
   if (!fs.existsSync(evalCurrentPath)) {
     issues.push(`missing eval snapshot: ${path.relative(repoRoot, evalCurrentPath)}`);
@@ -944,6 +1063,7 @@ function handleMemoryTeach(workspace, flags) {
   const hostName = normalizeHostName(flags.host || workspace.activeHostName);
   const report = teachHostMemory(workspace.repoRoot, hostName);
   saveLearningSnapshot(workspace.repoRoot, hostName, 'memory-teach');
+  captureBrainFromMemory(workspace, hostName, 'teach', `Teach memory refreshed for ${hostName}.`);
   console.log('[MEMORY TEACH]');
   console.log(`Host: ${hostName}`);
   console.log(`Wrote: ${path.relative(workspace.repoRoot, report.targetPath)}`);
@@ -956,6 +1076,7 @@ function handleMemoryGate(workspace, flags) {
   if (!report.ready) {
     saveLearningSnapshot(workspace.repoRoot, hostName, 'memory-gate');
   }
+  captureBrainFromMemory(workspace, hostName, 'gate', `Gate ${report.ready ? 'passed' : 'blocked'} for ${hostName}.`, report.ready);
   console.log('[MEMORY GATE]');
   console.log(`Host: ${hostName}`);
   console.log(`Ready: ${report.ready ? 'yes' : 'no'}`);
@@ -969,6 +1090,7 @@ function handleMemoryReflect(workspace, flags) {
   const intake = readChangeCurrent(workspace);
   const report = evaluateChangeGate(intake);
   const reflection = recordHostReflection(workspace, intake, report, hostName);
+  captureBrainFromMemory(workspace, hostName, 'reflect', `Reflection recorded for ${hostName}; ready=${report.ready ? 'yes' : 'no'}.`, report.ready);
   console.log('[MEMORY REFLECT]');
   console.log(`Host: ${hostName}`);
   console.log(`Wrote: ${path.relative(workspace.repoRoot, reflection.targetPath)}`);
@@ -978,6 +1100,7 @@ function handleMemoryDemote(workspace, flags) {
   const hostName = normalizeHostName(flags.host || workspace.activeHostName);
   const report = demoteHostMemory(workspace.repoRoot, hostName);
   saveLearningSnapshot(workspace.repoRoot, hostName, 'memory-demote');
+  captureBrainFromMemory(workspace, hostName, 'demote', `Demoted ${report.demoted.length} lessons for ${hostName}.`, false);
   console.log('[MEMORY DEMOTE]');
   console.log(`Host: ${hostName}`);
   console.log(`Demoted: ${report.demoted.length}`);
@@ -1023,6 +1146,7 @@ function handleMemoryLearn(workspace, flags) {
   if (report.applied && report.promoted > 0) {
     saveLearningSnapshot(workspace.repoRoot, hostName, 'memory-learn');
   }
+  captureBrainFromMemory(workspace, hostName, 'learn', `Learned ${report.promoted} lessons for ${hostName}; applied=${report.applied ? 'yes' : 'no'}.`, report.promoted > 0);
 }
 
 function handleMemoryCapture(workspace, positional) {
@@ -1034,6 +1158,7 @@ function handleMemoryCapture(workspace, positional) {
   const intake = readChangeCurrent(workspace);
   const report = evaluateChangeGate(intake);
   captureChangeMemory(workspace, intake, report, workspace.activeHostName);
+  captureBrainFromChange(workspace, intake, 'memory-capture');
   console.log(`Captured change memory for ${intake.target || 'unknown target'}`);
 }
 
@@ -1408,6 +1533,28 @@ function saveLearningSnapshot(repoRoot, hostName, source = 'manual') {
     fileCount: Object.keys(snapshot.files).length,
     source,
   }) + '\n', 'utf8');
+  try {
+    captureBrainFromRecovery({
+      repoRoot,
+      activeProfileName: snapshot.activeProfile,
+      activeHostName: normalizedHost,
+      trainingRecoveryDir: path.dirname(path.dirname(paths.latestPath)),
+      brainCurrentPath: path.join(repoRoot, 'docs', 'brain', 'current.json'),
+      brainHistoryPath: path.join(repoRoot, 'docs', 'brain', 'history.jsonl'),
+      activeProfile: { profile: snapshot.activeProfile },
+      manifest: readJson(path.join(repoRoot, 'agent-system.json')),
+      profileDocPath: path.join(repoRoot, 'profiles', snapshot.activeProfile, 'AGENTS.md'),
+      manifestPath: path.join(repoRoot, 'agent-system.json'),
+    }, {
+      activeProfile: snapshot.activeProfile,
+      activeHost: normalizedHost,
+      fileCount: Object.keys(snapshot.files).length,
+      latestPath: paths.latestPath,
+      archivePath,
+    }, source);
+  } catch {
+    // Brain capture should not block recovery snapshots.
+  }
   return {
     snapshot,
     latestPath: paths.latestPath,
@@ -1503,6 +1650,576 @@ function renderLearningSnapshotRestore(report) {
   lines.push(`Restored: ${report.fileCount}`);
   lines.push(`Source: ${path.relative(process.cwd(), report.snapshotPath)}`);
   return lines.join('\n');
+}
+
+function createEmptyBrainState(workspace) {
+  return {
+    kind: 'agent-system-brain',
+    brainVersion: 1,
+    activeProfile: workspace.activeProfileName,
+    activeHost: workspace.activeHostName,
+    generatedAt: '',
+    updatedAt: '',
+    counts: {
+      total: 0,
+      active: 0,
+      candidate: 0,
+      demoted: 0,
+      archived: 0,
+      byScope: {},
+      bySource: {},
+    },
+    entries: [],
+  };
+}
+
+function readBrainCurrent(workspace) {
+  if (!fs.existsSync(workspace.brainCurrentPath)) {
+    return createEmptyBrainState(workspace);
+  }
+  try {
+    const current = readJson(workspace.brainCurrentPath);
+    return materializeBrainStateFromEntries(workspace, current.entries || []);
+  } catch {
+    return createEmptyBrainState(workspace);
+  }
+}
+
+function readBrainHistory(workspace) {
+  if (!fs.existsSync(workspace.brainHistoryPath)) {
+    return [];
+  }
+  const entries = [];
+  const lines = fs.readFileSync(workspace.brainHistoryPath, 'utf8').split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      entries.push(JSON.parse(trimmed));
+    } catch {
+      continue;
+    }
+  }
+  return entries;
+}
+
+function writeBrainCurrent(workspace, current) {
+  fs.mkdirSync(path.dirname(workspace.brainCurrentPath), { recursive: true });
+  fs.writeFileSync(workspace.brainCurrentPath, JSON.stringify(current, null, 2) + '\n', 'utf8');
+  return current;
+}
+
+function materializeBrainStateFromEntries(workspace, entries) {
+  const normalizedEntries = Array.isArray(entries)
+    ? entries
+        .map((entry) => normalizeBrainEntry(entry, workspace))
+        .filter(Boolean)
+    : [];
+  normalizedEntries.sort((left, right) => String(right.updatedAt || right.createdAt || '').localeCompare(String(left.updatedAt || left.createdAt || '')));
+  return buildBrainState(workspace, normalizedEntries);
+}
+
+function materializeBrainCurrent(workspace) {
+  const history = readBrainHistory(workspace);
+  if (history.length === 0) {
+    const current = readBrainCurrent(workspace);
+    return current.entries.length > 0 ? buildBrainState(workspace, current.entries) : current;
+  }
+  const entries = new Map();
+  for (const event of history) {
+    const normalized = normalizeBrainEntry(event, workspace);
+    if (!normalized) continue;
+    const existing = entries.get(normalized.brainId);
+    entries.set(normalized.brainId, existing ? mergeBrainEntries(existing, normalized) : normalized);
+  }
+  return buildBrainState(workspace, Array.from(entries.values()));
+}
+
+function buildBrainState(workspace, entries, generatedAt = new Date().toISOString()) {
+  return {
+    kind: 'agent-system-brain',
+    brainVersion: 1,
+    activeProfile: workspace.activeProfileName,
+    activeHost: workspace.activeHostName,
+    generatedAt,
+    updatedAt: generatedAt,
+    counts: buildBrainCounts(entries),
+    entries,
+  };
+}
+
+function buildBrainCounts(entries) {
+  const counts = {
+    total: 0,
+    active: 0,
+    candidate: 0,
+    demoted: 0,
+    archived: 0,
+    byScope: {},
+    bySource: {},
+  };
+  for (const entry of entries || []) {
+    if (!entry) continue;
+    counts.total += 1;
+    const status = normalizeBrainStatus(entry.status);
+    counts[status] = (counts[status] || 0) + 1;
+    const scope = normalizeBrainScope(entry.scope || 'system');
+    counts.byScope[scope] = (counts.byScope[scope] || 0) + 1;
+    const source = String(entry.source || 'manual').trim().toLowerCase() || 'manual';
+    counts.bySource[source] = (counts.bySource[source] || 0) + 1;
+  }
+  return counts;
+}
+
+function normalizeBrainScope(value) {
+  const text = String(value || 'system').trim().toLowerCase();
+  if (!text) return 'system';
+  if (text.startsWith('host:') || text.startsWith('profile:') || text.startsWith('task:')) {
+    return text;
+  }
+  if (['system', 'profile', 'host', 'change', 'training', 'eval', 'luau', 'recovery', 'upgrade', 'memory'].includes(text)) {
+    return text;
+  }
+  return text.replace(/[^a-z0-9:-]+/g, '-');
+}
+
+function normalizeBrainStatus(value) {
+  const text = String(value || 'candidate').trim().toLowerCase();
+  if (text === 'active' || text === 'promoted' || text === 'ready') return 'active';
+  if (text === 'demoted' || text === 'blocked') return 'demoted';
+  if (text === 'archived' || text === 'pruned') return 'archived';
+  return 'candidate';
+}
+
+function brainEntryId(title, scope, source) {
+  return `brain:${slugifyText(source || 'manual')}:${slugifyText(scope || 'system')}:${slugifyText(title || 'lesson')}`;
+}
+
+function slugifyText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 120) || 'entry';
+}
+
+function normalizeBrainEntry(entry, workspace) {
+  if (!entry || typeof entry !== 'object') {
+    return null;
+  }
+  const now = new Date().toISOString();
+  const title = String(entry.title || entry.name || entry.summary || 'Brain lesson').trim();
+  const summary = String(entry.summary || title).trim();
+  const source = String(entry.source || entry.eventType || 'manual').trim().toLowerCase() || 'manual';
+  const scope = normalizeBrainScope(entry.scope || 'system');
+  const status = normalizeBrainStatus(entry.status || 'candidate');
+  const confidence = Math.max(0, Math.min(100, parseCount(entry.confidence, 70)));
+  const brainId = String(entry.brainId || brainEntryId(title, scope, source)).trim();
+  const host = normalizeHostName(entry.host || workspace.activeHostName);
+  const profile = String(entry.profile || workspace.activeProfileName || 'imphub').trim();
+  return {
+    brainId,
+    source,
+    scope,
+    status,
+    confidence,
+    title,
+    summary,
+    facts: normalizeChangeList(entry.facts || entry.fact || []),
+    tags: normalizeChangeList(entry.tags || entry.tag || []),
+    relatedPaths: normalizeChangeList(entry.relatedPaths || entry.paths || []),
+    evidence: String(entry.evidence || '').trim(),
+    host,
+    profile,
+    createdAt: entry.createdAt || now,
+    updatedAt: now,
+    eventCount: Math.max(1, parseCount(entry.eventCount, 0) + 1),
+    lastEvent: source,
+  };
+}
+
+function mergeBrainEntries(existing, incoming) {
+  return {
+    ...existing,
+    ...incoming,
+    createdAt: existing.createdAt || incoming.createdAt,
+    updatedAt: incoming.updatedAt,
+    eventCount: Math.max(1, parseCount(existing.eventCount, 1) + 1),
+    confidence: Math.max(existing.confidence || 0, incoming.confidence || 0),
+    facts: mergeUniqueStrings(existing.facts, incoming.facts),
+    tags: mergeUniqueStrings(existing.tags, incoming.tags),
+    relatedPaths: mergeUniqueStrings(existing.relatedPaths, incoming.relatedPaths),
+    lastEvent: incoming.source,
+  };
+}
+
+function mergeUniqueStrings(left, right) {
+  return Array.from(new Set([...(Array.isArray(left) ? left : normalizeChangeList(left)), ...(Array.isArray(right) ? right : normalizeChangeList(right))].filter(Boolean)));
+}
+
+function appendBrainEvent(workspace, entry) {
+  const current = materializeBrainCurrent(workspace);
+  const normalized = normalizeBrainEntry(entry, workspace);
+  if (!normalized) {
+    throw new Error('brain entry missing content');
+  }
+  const existing = current.entries.find((item) => item.brainId === normalized.brainId);
+  const merged = existing ? mergeBrainEntries(existing, normalized) : { ...normalized, eventCount: 1 };
+  const entries = current.entries.filter((item) => item.brainId !== merged.brainId);
+  entries.unshift(merged);
+  const next = buildBrainState(workspace, entries);
+  writeBrainCurrent(workspace, next);
+
+  const history = readBrainHistory(workspace);
+  const historyEntry = {
+    kind: 'agent-system-brain-event',
+    brainVersion: 1,
+    ...merged,
+    eventType: normalized.source,
+    recordedAt: normalized.updatedAt,
+    sequence: history.length + 1,
+  };
+  fs.mkdirSync(path.dirname(workspace.brainHistoryPath), { recursive: true });
+  fs.appendFileSync(workspace.brainHistoryPath, JSON.stringify(historyEntry) + '\n', 'utf8');
+  return merged;
+}
+
+function brainScopeMatches(entryScope, requestedScope) {
+  const entryText = normalizeBrainScope(entryScope || 'system');
+  const requestText = normalizeBrainScope(requestedScope || 'all');
+  if (requestText === 'all') {
+    return true;
+  }
+  if (entryText === requestText) {
+    return true;
+  }
+  return entryText.includes(requestText) || requestText.includes(entryText);
+}
+
+function scoreBrainEntry(entry, normalizedQuery, queryTokens, explain, reasons) {
+  if (!normalizedQuery && (!queryTokens || queryTokens.length === 0)) {
+    if (explain) reasons.push('list current entry');
+    return 1;
+  }
+  let score = 0;
+  const haystacks = [
+    ['title', entry.title],
+    ['summary', entry.summary],
+    ['source', entry.source],
+    ['scope', entry.scope],
+    ['status', entry.status],
+    ['evidence', entry.evidence],
+    ['facts', Array.isArray(entry.facts) ? entry.facts.join(' ') : entry.facts],
+    ['tags', Array.isArray(entry.tags) ? entry.tags.join(' ') : entry.tags],
+    ['paths', Array.isArray(entry.relatedPaths) ? entry.relatedPaths.join(' ') : entry.relatedPaths],
+    ['brainId', entry.brainId],
+  ];
+  for (const [label, value] of haystacks) {
+    const text = normalize(value);
+    if (!text) continue;
+    if (normalizedQuery && text.includes(normalizedQuery)) {
+      score += 20;
+      if (explain) reasons.push(`matched ${label}`);
+    }
+    for (const token of queryTokens || []) {
+      if (token && text.includes(token)) {
+        score += 4;
+        if (explain && !reasons.includes(`token ${token}`)) {
+          reasons.push(`token ${token}`);
+        }
+      }
+    }
+  }
+  return score;
+}
+
+function queryBrainEntries(workspace, query, opts = {}) {
+  const current = materializeBrainCurrent(workspace);
+  const scopeFilter = normalizeBrainScope(opts.scope || 'all');
+  const normalizedQuery = normalize(query);
+  const queryTokens = normalizedQuery ? normalizedQuery.split(' ').filter(Boolean) : [];
+  const results = [];
+  for (const entry of current.entries) {
+    if (scopeFilter !== 'all' && scopeFilter && !brainScopeMatches(entry.scope, scopeFilter)) {
+      continue;
+    }
+    const reasons = [];
+    const score = scoreBrainEntry(entry, normalizedQuery, queryTokens, opts.explain, reasons);
+    if (!normalizedQuery && !opts.list) {
+      results.push({ ...entry, score, reasons });
+      continue;
+    }
+    if (score > 0 || opts.list) {
+      results.push({ ...entry, score, reasons });
+    }
+  }
+  results.sort((left, right) => {
+    if ((right.score || 0) !== (left.score || 0)) {
+      return (right.score || 0) - (left.score || 0);
+    }
+    return String(right.updatedAt || right.createdAt || '').localeCompare(String(left.updatedAt || left.createdAt || ''));
+  });
+  return { matches: results };
+}
+
+function pruneBrainHistory(workspace) {
+  const history = readBrainHistory(workspace);
+  const seen = new Set();
+  const prunedHistory = [];
+  let pruned = 0;
+  for (const event of history) {
+    const normalized = normalizeBrainEntry(event, workspace);
+    if (!normalized) {
+      pruned += 1;
+      continue;
+    }
+    const key = [
+      normalized.brainId,
+      normalized.status,
+      normalizeNewlines(normalized.summary),
+      normalizeNewlines(normalized.evidence),
+      normalized.source,
+    ].join('|');
+    if (seen.has(key)) {
+      pruned += 1;
+      continue;
+    }
+    seen.add(key);
+    prunedHistory.push({
+      kind: 'agent-system-brain-event',
+      brainVersion: 1,
+      ...normalized,
+      eventType: normalized.source,
+      recordedAt: event.recordedAt || normalized.updatedAt,
+      sequence: prunedHistory.length + 1,
+    });
+  }
+  fs.mkdirSync(path.dirname(workspace.brainHistoryPath), { recursive: true });
+  fs.writeFileSync(workspace.brainHistoryPath, prunedHistory.map((entry) => JSON.stringify(entry)).join('\n') + (prunedHistory.length > 0 ? '\n' : ''), 'utf8');
+  const materialized = materializeBrainCurrent(workspace);
+  writeBrainCurrent(workspace, materialized);
+  return {
+    pruned,
+    notes: pruned > 0 ? ['rewrote brain history', 'refreshed current brain state'] : ['no duplicate events found'],
+  };
+}
+
+function buildBrainSnapshot(workspace) {
+  const current = materializeBrainCurrent(workspace);
+  const history = readBrainHistory(workspace);
+  return {
+    kind: 'agent-system-brain-snapshot',
+    brainVersion: 1,
+    createdAt: new Date().toISOString(),
+    activeProfile: current.activeProfile,
+    activeHost: current.activeHost,
+    counts: current.counts,
+    current,
+    history,
+  };
+}
+
+function restoreBrainSnapshot(workspace, snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') {
+    throw new Error('brain snapshot must be an object');
+  }
+  const currentEntries = snapshot.current && Array.isArray(snapshot.current.entries)
+    ? snapshot.current.entries
+    : Array.isArray(snapshot.entries)
+      ? snapshot.entries
+      : Array.isArray(snapshot.history)
+        ? snapshot.history
+        : [];
+  const current = materializeBrainStateFromEntries(workspace, currentEntries);
+  const history = Array.isArray(snapshot.history)
+    ? snapshot.history
+    : current.entries.map((entry, index) => ({
+        kind: 'agent-system-brain-event',
+        brainVersion: 1,
+        ...entry,
+        eventType: entry.source || 'snapshot',
+        recordedAt: entry.updatedAt || current.updatedAt || new Date().toISOString(),
+        sequence: index + 1,
+      }));
+  writeBrainCurrent(workspace, current);
+  fs.mkdirSync(path.dirname(workspace.brainHistoryPath), { recursive: true });
+  fs.writeFileSync(workspace.brainHistoryPath, history.map((entry, index) => JSON.stringify({ ...entry, sequence: entry.sequence || index + 1 })).join('\n') + (history.length > 0 ? '\n' : ''), 'utf8');
+  const restored = readBrainCurrent(workspace);
+  return {
+    activeProfile: restored.activeProfile,
+    activeHost: restored.activeHost,
+    entries: restored.entries.length,
+  };
+}
+
+function diffBrainSnapshot(workspace, snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') {
+    throw new Error('brain snapshot must be an object');
+  }
+  const current = materializeBrainCurrent(workspace);
+  const snapshotCurrent = snapshot.current && typeof snapshot.current === 'object'
+    ? materializeBrainStateFromEntries(workspace, snapshot.current.entries || [])
+    : materializeBrainStateFromEntries(workspace, Array.isArray(snapshot.entries) ? snapshot.entries : Array.isArray(snapshot.history) ? snapshot.history : []);
+  const currentMap = new Map(current.entries.map((entry) => [entry.brainId, entry]));
+  const snapshotMap = new Map((snapshotCurrent.entries || []).map((entry) => [entry.brainId, entry]));
+  const changed = [];
+  for (const [brainId, entry] of snapshotMap.entries()) {
+    const currentEntry = currentMap.get(brainId);
+    if (!currentEntry) {
+      changed.push(`missing in current: ${brainId}`);
+      continue;
+    }
+    if (normalizeNewlines(JSON.stringify(currentEntry)) !== normalizeNewlines(JSON.stringify(entry))) {
+      changed.push(`different: ${brainId}`);
+    }
+  }
+  for (const brainId of currentMap.keys()) {
+    if (!snapshotMap.has(brainId)) {
+      changed.push(`new in current: ${brainId}`);
+    }
+  }
+  return {
+    activeProfile: current.activeProfile,
+    activeHost: current.activeHost,
+    changed,
+  };
+}
+
+function captureBrainFromChange(workspace, intake, eventType) {
+  if (!intake) return;
+  const target = intake.target || intake.name || 'change';
+  const title = `${humanizeChangeType(intake.type || eventType || 'update')} ${target}`;
+  const ready = Boolean(intake.ready);
+  appendBrainEvent(workspace, {
+    source: eventType || 'change',
+    scope: `profile:${workspace.activeProfileName}`,
+    status: ready ? 'active' : 'candidate',
+    confidence: ready ? 80 : 60,
+    title,
+    summary: `${humanizeChangeType(intake.type || 'update')} gate for ${target} using ${intake.routeSelected || 'route'}${ready ? ' is ready.' : ' still needs proof.'}`,
+    facts: [
+      `type: ${intake.type || 'update'}`,
+      `target: ${target}`,
+      `route: ${intake.routeSelected || 'n/a'}`,
+      `baseline: ${intake.baselineFile || 'n/a'}`,
+      `regression: ${intake.regressionMatrix || 'n/a'}`,
+    ],
+    tags: normalizeChangeList(intake.classification || []).concat(normalizeChangeList(intake.ownedDomains || []), [intake.type || 'update']).filter(Boolean),
+    relatedPaths: normalizeChangeList([
+      intake.target || '',
+      intake.baselineFile || '',
+      intake.regressionMatrix || '',
+      intake.oldNewMapping || '',
+    ]),
+    evidence: ready ? 'change gate ready' : `change gate blocked: ${formatList(intake.stopLineRisks || [])}`,
+    host: workspace.activeHostName,
+    profile: workspace.activeProfileName,
+  });
+}
+
+function captureBrainFromTraining(workspace, report) {
+  appendBrainEvent(workspace, {
+    source: `train-${report.mode}`,
+    scope: `host:${normalizeHostName(report.activeHost)}`,
+    status: report.outcome === 'held' ? 'candidate' : 'active',
+    confidence: report.outcome === 'held' ? 65 : 82,
+    title: `${humanize(report.activeHost)} training ${report.mode}`,
+    summary: `${report.mode} training on ${report.focus || 'general'} ended with ${report.outcome}.`,
+    facts: [
+      `focus: ${report.focus || 'general'}`,
+      `language: ${report.language || 'general'}`,
+      `lesson: ${report.lesson || report.luauLesson || 'none'}`,
+    ],
+    tags: ['train', report.focus || 'general', report.language || 'general'].concat(report.luauLesson ? ['luau'] : []),
+    relatedPaths: [report.summaryPath, workspace.trainingCurrentPath, workspace.trainingHistoryPath],
+    evidence: report.lesson || report.luauLesson || report.outcome,
+    host: report.activeHost,
+    profile: report.activeProfile,
+  });
+}
+
+function captureBrainFromEvaluation(workspace, report) {
+  appendBrainEvent(workspace, {
+    source: `eval-${report.mode}`,
+    scope: `host:${normalizeHostName(report.activeHost)}`,
+    status: report.promoted ? 'active' : 'candidate',
+    confidence: report.promoted ? 85 : Math.max(45, Math.min(80, report.score || 50)),
+    title: `${humanize(report.activeHost)} evaluation ${report.mode}`,
+    summary: `Evaluation score ${report.score} with verdict ${report.verdict} for ${report.focus || 'general'}.`,
+    facts: [
+      `threshold: ${report.threshold}`,
+      `score: ${report.score}`,
+      `delta: ${report.delta}`,
+      `verdict: ${report.verdict}`,
+    ],
+    tags: ['eval', report.mode, report.focus || 'general'].concat(report.luauLesson ? ['luau'] : []),
+    relatedPaths: [report.summaryPath, workspace.evalCurrentPath, workspace.evalHistoryPath],
+    evidence: report.luauLesson || report.verdict,
+    host: report.activeHost,
+    profile: report.activeProfile,
+  });
+}
+
+function captureBrainFromUpgrade(workspace, report) {
+  appendBrainEvent(workspace, {
+    source: 'upgrade',
+    scope: `profile:${workspace.activeProfileName}`,
+    status: 'active',
+    confidence: 78,
+    title: `${workspace.activeProfileName} upgrade sync`,
+    summary: `Upgrade sync touched ${report.agents.length} agent sections across ${report.hosts.length} host views.`,
+    facts: [
+      `agents: ${report.agents.map((agent) => agent.title).join(', ') || 'none'}`,
+      `hosts: ${report.hosts.join(', ') || 'none'}`,
+    ],
+    tags: ['upgrade', workspace.activeProfileName].concat(report.hosts || []),
+    relatedPaths: [workspace.profileDocPath, path.join(workspace.repoRoot, 'AGENTS.md'), workspace.manifestPath],
+    evidence: `Upgrade sync for ${workspace.activeProfileName}`,
+    host: workspace.activeHostName,
+    profile: workspace.activeProfileName,
+  });
+}
+
+function captureBrainFromRecovery(workspace, report, source = 'recovery') {
+  appendBrainEvent(workspace, {
+    source,
+    scope: `host:${normalizeHostName(report.activeHost || workspace.activeHostName)}`,
+    status: 'active',
+    confidence: 88,
+    title: `${humanize(report.activeHost || workspace.activeHostName)} recovery snapshot`,
+    summary: `Captured ${report.fileCount} learning files for rollback and restore.`,
+    facts: [
+      `profile: ${report.activeProfile || workspace.activeProfileName}`,
+      `host: ${report.activeHost || workspace.activeHostName}`,
+      `files: ${report.fileCount}`,
+    ],
+    tags: ['recovery', 'snapshot', report.activeHost || workspace.activeHostName],
+    relatedPaths: [report.latestPath, report.archivePath, workspace.trainingRecoveryDir],
+    evidence: `Recovery snapshot from ${source}`,
+    host: report.activeHost || workspace.activeHostName,
+    profile: report.activeProfile || workspace.activeProfileName,
+  });
+}
+
+function captureBrainFromMemory(workspace, hostName, action, detail, ready = true) {
+  appendBrainEvent(workspace, {
+    source: `memory-${action}`,
+    scope: `host:${normalizeHostName(hostName || workspace.activeHostName)}`,
+    status: ready ? 'active' : 'candidate',
+    confidence: ready ? 74 : 58,
+    title: `${humanize(hostName || workspace.activeHostName)} memory ${action}`,
+    summary: detail || `Memory action ${action} on ${hostName || workspace.activeHostName}.`,
+    facts: [detail || `action: ${action}`],
+    tags: ['memory', action],
+    relatedPaths: [
+      resolveHostMemoryPath(workspace.repoRoot, hostName || workspace.activeHostName, 'host'),
+      resolveHostMemoryPath(workspace.repoRoot, hostName || workspace.activeHostName, 'change'),
+      resolveHostMemoryPath(workspace.repoRoot, hostName || workspace.activeHostName, 'packs'),
+    ],
+    evidence: detail || action,
+    host: hostName || workspace.activeHostName,
+    profile: workspace.activeProfileName,
+  });
 }
 
 function renderLearningSnapshotDiff(report) {
@@ -2462,6 +3179,7 @@ function writeEvaluationRecord(workspace, report) {
   };
   fs.mkdirSync(path.dirname(workspace.evalHistoryPath), { recursive: true });
   fs.appendFileSync(workspace.evalHistoryPath, JSON.stringify(historyEntry) + '\n', 'utf8');
+  captureBrainFromEvaluation(workspace, report);
 }
 
 function writeEvaluationSummary(workspace, report) {
@@ -3257,6 +3975,244 @@ function maybeGenerateTrainingPack(repoRoot, hostName, cycleCountOverride = null
   return { generated: true, cycles, path: packPath };
 }
 
+function handleBrain(workspace, flags, positional) {
+  const action = positional[0] || 'query';
+  if (action === 'add') {
+    handleBrainAdd(workspace, flags, positional.slice(1));
+    return;
+  }
+  if (action === 'query') {
+    handleBrainQuery(workspace, flags, positional.slice(1));
+    return;
+  }
+  if (action === 'explain') {
+    handleBrainExplain(workspace, flags, positional.slice(1));
+    return;
+  }
+  if (action === 'promote') {
+    handleBrainPromote(workspace, flags, positional.slice(1));
+    return;
+  }
+  if (action === 'demote') {
+    handleBrainDemote(workspace, flags, positional.slice(1));
+    return;
+  }
+  if (action === 'prune') {
+    handleBrainPrune(workspace);
+    return;
+  }
+  if (action === 'snapshot') {
+    handleBrainSnapshot(workspace, flags, positional.slice(1));
+    return;
+  }
+  if (action === 'restore') {
+    handleBrainRestore(workspace, flags, positional.slice(1));
+    return;
+  }
+  if (action === 'diff') {
+    handleBrainDiff(workspace, flags, positional.slice(1));
+    return;
+  }
+  if (action === 'sync') {
+    handleBrainSync(workspace);
+    return;
+  }
+  if (action === 'list') {
+    handleBrainList(workspace, flags, positional.slice(1));
+    return;
+  }
+  console.error(`Unknown brain action: ${action}`);
+  process.exit(1);
+}
+
+function handleBrainAdd(workspace, flags, positional) {
+  const summary = positional.join(' ').trim() || flags.detail || flags.intent || flags.name || 'Brain entry';
+  const report = appendBrainEvent(workspace, {
+    source: flags.source || 'manual',
+    scope: flags.scope || 'system',
+    status: flags.status || 'candidate',
+    confidence: parseCount(flags.confidence, 70),
+    title: flags.title || flags.name || summary,
+    summary,
+    facts: normalizeChangeList(flags.fact || flags.detail || ''),
+    tags: normalizeChangeList(flags.tag || ''),
+    relatedPaths: normalizeChangeList(flags.path || ''),
+    evidence: flags.reason || '',
+  });
+  console.log('[BRAIN ADD]');
+  console.log(`Brain ID: ${report.brainId}`);
+  console.log(`Scope: ${report.scope}`);
+  console.log(`Status: ${report.status}`);
+  console.log(`Summary: ${report.summary}`);
+}
+
+function handleBrainQuery(workspace, flags, positional) {
+  const query = positional.join(' ').trim() || flags.detail || flags.intent || '';
+  if (!query) {
+    console.error('Usage: agent-system brain query <text>');
+    process.exit(1);
+  }
+  const report = queryBrainEntries(workspace, query, { explain: false });
+  console.log('[BRAIN QUERY]');
+  console.log(`Query: ${query}`);
+  console.log(`Hits: ${report.matches.length}`);
+  for (const match of report.matches) {
+    console.log(`- [${match.status}] ${match.title} (${match.scope}, ${match.source}, ${match.confidence})`);
+    console.log(`  ${match.summary}`);
+  }
+}
+
+function handleBrainExplain(workspace, flags, positional) {
+  const query = positional.join(' ').trim() || flags.detail || flags.intent || '';
+  if (!query) {
+    console.error('Usage: agent-system brain explain <text>');
+    process.exit(1);
+  }
+  const report = queryBrainEntries(workspace, query, { explain: true });
+  console.log('[BRAIN EXPLAIN]');
+  console.log(`Query: ${query}`);
+  console.log(`Hits: ${report.matches.length}`);
+  for (const match of report.matches) {
+    console.log(`- [${match.status}] ${match.title} (${match.scope}, ${match.source}, ${match.confidence})`);
+    console.log(`  Matched: ${match.reasons.join(', ')}`);
+  }
+}
+
+function handleBrainPromote(workspace, flags, positional) {
+  const query = positional.join(' ').trim() || flags.brainId || flags.detail || flags.intent || '';
+  if (!query) {
+    console.error('Usage: agent-system brain promote <text|id>');
+    process.exit(1);
+  }
+  const matches = queryBrainEntries(workspace, query, { explain: true }).matches;
+  if (matches.length === 0) {
+    console.error(`No brain entry matched: ${query}`);
+    process.exit(1);
+  }
+  const promoted = appendBrainEvent(workspace, {
+    brainId: matches[0].brainId,
+    source: 'brain-promote',
+    scope: flags.scope || matches[0].scope,
+    status: 'active',
+    confidence: Math.min(100, (matches[0].confidence || 70) + 10),
+    title: matches[0].title,
+    summary: matches[0].summary,
+    facts: matches[0].facts,
+    tags: matches[0].tags,
+    relatedPaths: matches[0].relatedPaths,
+    evidence: `Promoted from ${matches[0].status}`,
+  });
+  console.log('[BRAIN PROMOTE]');
+  console.log(`Brain ID: ${promoted.brainId}`);
+  console.log(`Scope: ${promoted.scope}`);
+  console.log(`Status: ${promoted.status}`);
+}
+
+function handleBrainDemote(workspace, flags, positional) {
+  const query = positional.join(' ').trim() || flags.brainId || flags.detail || flags.intent || '';
+  if (!query) {
+    console.error('Usage: agent-system brain demote <text|id>');
+    process.exit(1);
+  }
+  const matches = queryBrainEntries(workspace, query, { explain: true }).matches;
+  if (matches.length === 0) {
+    console.error(`No brain entry matched: ${query}`);
+    process.exit(1);
+  }
+  const demoted = appendBrainEvent(workspace, {
+    brainId: matches[0].brainId,
+    source: 'brain-demote',
+    scope: flags.scope || matches[0].scope,
+    status: 'demoted',
+    confidence: Math.max(0, (matches[0].confidence || 50) - 20),
+    title: matches[0].title,
+    summary: matches[0].summary,
+    facts: matches[0].facts,
+    tags: matches[0].tags,
+    relatedPaths: matches[0].relatedPaths,
+    evidence: `Demoted from ${matches[0].status}`,
+  });
+  console.log('[BRAIN DEMOTE]');
+  console.log(`Brain ID: ${demoted.brainId}`);
+  console.log(`Scope: ${demoted.scope}`);
+  console.log(`Status: ${demoted.status}`);
+}
+
+function handleBrainPrune(workspace) {
+  const report = pruneBrainHistory(workspace);
+  console.log('[BRAIN PRUNE]');
+  console.log(`Pruned: ${report.pruned}`);
+  for (const note of report.notes) {
+    console.log(`- ${note}`);
+  }
+}
+
+function handleBrainSnapshot(workspace, flags, positional) {
+  const outputPath = flags.files?.[0] || positional[0] || path.join(workspace.repoRoot, workspace.manifest.brain?.snapshots || 'docs/brain/snapshots', `${normalizeHostName(workspace.activeHostName)}-brain.json`);
+  const absolutePath = path.isAbsolute(outputPath) ? outputPath : path.resolve(workspace.repoRoot, outputPath);
+  const snapshot = buildBrainSnapshot(workspace);
+  fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
+  fs.writeFileSync(absolutePath, JSON.stringify(snapshot, null, 2) + '\n', 'utf8');
+  console.log('[BRAIN SNAPSHOT]');
+  console.log(`Host: ${snapshot.activeHost}`);
+  console.log(`Profile: ${snapshot.activeProfile}`);
+  console.log(`Entries: ${snapshot.history.length}`);
+  console.log(`Wrote: ${path.relative(workspace.repoRoot, absolutePath)}`);
+}
+
+function handleBrainRestore(workspace, flags, positional) {
+  const inputPath = flags.files?.[0] || positional[0];
+  if (!inputPath) {
+    console.error('Usage: agent-system brain restore --file <snapshot.json>');
+    process.exit(1);
+  }
+  const absolutePath = path.isAbsolute(inputPath) ? inputPath : path.resolve(workspace.repoRoot, inputPath);
+  const snapshot = readJson(absolutePath);
+  const report = restoreBrainSnapshot(workspace, snapshot);
+  console.log('[BRAIN RESTORE]');
+  console.log(`Host: ${report.activeHost}`);
+  console.log(`Profile: ${report.activeProfile}`);
+  console.log(`Restored: ${report.entries}`);
+}
+
+function handleBrainDiff(workspace, flags, positional) {
+  const inputPath = flags.files?.[0] || positional[0];
+  if (!inputPath) {
+    console.error('Usage: agent-system brain diff --file <snapshot.json>');
+    process.exit(1);
+  }
+  const absolutePath = path.isAbsolute(inputPath) ? inputPath : path.resolve(workspace.repoRoot, inputPath);
+  const snapshot = readJson(absolutePath);
+  const report = diffBrainSnapshot(workspace, snapshot);
+  console.log('[BRAIN DIFF]');
+  console.log(`Host: ${report.activeHost}`);
+  console.log(`Profile: ${report.activeProfile}`);
+  console.log(`Changed: ${report.changed.length}`);
+  for (const item of report.changed) {
+    console.log(`- ${item}`);
+  }
+}
+
+function handleBrainSync(workspace) {
+  const current = materializeBrainCurrent(workspace);
+  writeBrainCurrent(workspace, current);
+  console.log('[BRAIN SYNC]');
+  console.log(`Host: ${current.activeHost}`);
+  console.log(`Profile: ${current.activeProfile}`);
+  console.log(`Entries: ${current.counts.total}`);
+}
+
+function handleBrainList(workspace, flags, positional) {
+  const scope = flags.scope || positional[0] || 'all';
+  const report = queryBrainEntries(workspace, '', { scope, list: true });
+  console.log('[BRAIN LIST]');
+  console.log(`Scope: ${scope}`);
+  console.log(`Entries: ${report.matches.length}`);
+  for (const match of report.matches.slice(0, 20)) {
+    console.log(`- [${match.status}] ${match.title} (${match.scope}, ${match.source}, ${match.confidence})`);
+  }
+}
+
 function writeTrainingRecord(workspace, report) {
   const current = {
     kind: report.kind,
@@ -3290,6 +4246,7 @@ function writeTrainingRecord(workspace, report) {
   };
   fs.mkdirSync(path.dirname(workspace.trainingHistoryPath), { recursive: true });
   fs.appendFileSync(workspace.trainingHistoryPath, JSON.stringify(historyEntry) + '\n', 'utf8');
+  captureBrainFromTraining(workspace, report);
 }
 
 function readTrainingCurrent(workspace) {
@@ -3534,6 +4491,7 @@ function syncUpgradeMemory(workspace, report) {
     const existing = fs.existsSync(hostPath) ? fs.readFileSync(hostPath, 'utf8') : '';
     fs.writeFileSync(hostPath, mergeUpgradeMemory(existing, renderUpgradeMemoryBlock('host', host, report, host)), 'utf8');
   }
+  captureBrainFromUpgrade(workspace, report);
 }
 
 function renderUpgradeMemoryBlock(scope, name, report, syncHost = report.activeHost) {
@@ -3858,6 +4816,10 @@ function buildLintReport(workspace) {
     ['training continuity history exists', () => fs.existsSync(workspace.trainingContinuousHistoryPath)],
     ['training continuity readme exists', () => fs.existsSync(workspace.trainingContinuousReadmePath)],
     ['training recovery readme exists', () => fs.existsSync(path.join(workspace.repoRoot, workspace.manifest.training?.recovery || 'docs/training/recovery', 'README.md'))],
+    ['brain readme exists', () => fs.existsSync(workspace.brainReadmePath)],
+    ['brain schema exists', () => fs.existsSync(workspace.brainSchemaPath)],
+    ['brain current exists', () => fs.existsSync(workspace.brainCurrentPath)],
+    ['brain history exists', () => fs.existsSync(workspace.brainHistoryPath)],
     ['eval snapshot exists', () => fs.existsSync(workspace.evalCurrentPath)],
     ['eval history exists', () => fs.existsSync(workspace.evalHistoryPath)],
     ['eval readme exists', () => fs.existsSync(workspace.evalReadmePath)],
@@ -4590,6 +5552,7 @@ function writeChangeRecord(workspace, intake, eventType) {
   };
   fs.mkdirSync(path.dirname(workspace.changeHistoryPath), { recursive: true });
   fs.appendFileSync(workspace.changeHistoryPath, JSON.stringify(record) + '\n', 'utf8');
+  captureBrainFromChange(workspace, current, eventType);
   return current;
 }
 
