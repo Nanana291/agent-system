@@ -51,6 +51,8 @@ Durable rules should be written where they belong first, then kept inside the ho
 - `change analyze`, `change scout`, `change auto-scaffold`, `change scaffold`, `change preview`, `change apply`, `change diff`, `change rollback`, and `change gate` are the change workflow entry points.
 - `change memory-suggest` proposes durable lessons to promote from change memory.
 - `quick-update` prepares a ready-to-review update intake from target and intent without requiring `git diff`.
+- `quick-fix` handles a single-file code/config fix with a fast lock, fast gate, and quick memory capture.
+- `route` auto-suggests `quick-fix` when the workspace has exactly one touched code/config file.
 - `upgrade` applies multi-agent instruction upgrades and syncs the resulting memory into the active profile and all supported host memories.
 - `docs/training/current.json`, `docs/training/history.jsonl`, and `docs/training/<session>.md` record the automatic training loop.
 - `train`, `train error`, `train review`, `train replay`, `train promote`, and `train sync` train several agents at once, sync the active host memory, and write an auditable lesson trail.
@@ -59,6 +61,6 @@ Durable rules should be written where they belong first, then kept inside the ho
 - `memory/change/<host>.md` stores auto-captured lessons from change gates before promotion into that same host's memory file.
 - `memory learn` auto-promotes repeated change lessons into the active host's memory file during a successful gate.
 
-## V0.5.3 intent
+## V0.5.3.5 intent
 
-This release adds portable recovery, quick update entry points, multi-agent upgrade syncing, the new automatic training loop, and the evaluation loop on top of the routing and memory scaffold: the repo can snapshot the mutable workspace, validate the bundle, prune duplicate noise, restore the state back into a clean checkout, prepare a fast update intake from just target plus intent, apply direct instruction upgrades across several agents, train those agents directly into the active host and profile memory without duplicating the sync block, and then score the workspace so only durable lessons are promoted into memory.
+This release adds portable recovery, quick update entry points, the single-file quick-fix path, multi-agent upgrade syncing, the new automatic training loop, and the evaluation loop on top of the routing and memory scaffold: the repo can snapshot the mutable workspace, validate the bundle, prune duplicate noise, restore the state back into a clean checkout, prepare a fast update intake from just target plus intent, suggest a quick lock when one code/config file is touched, apply direct instruction upgrades across several agents, train those agents directly into the active host and profile memory without duplicating the sync block, and then score the workspace so only durable lessons are promoted into memory.

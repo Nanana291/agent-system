@@ -41,6 +41,9 @@ async function main() {
     case 'upgrade':
       handleUpgrade(workspace, flags, positional);
       return;
+    case 'quick-fix':
+      handleQuickFix(workspace, flags, positional);
+      return;
     case 'train':
       handleTrain(workspace, flags, positional);
       return;
@@ -48,10 +51,10 @@ async function main() {
       handleEval(workspace, flags, positional);
       return;
     case 'route':
-      printRouteSummary(workspace.profile, await readTaskText(positional));
+      printRouteSummary(workspace, await readTaskText(positional));
       return;
     case 'explain':
-      printRouteSummary(workspace.profile, await readTaskText(positional), true);
+      printRouteSummary(workspace, await readTaskText(positional), true);
       return;
     case 'gate':
       handleGate(await readGateText(positional, flags));
@@ -285,6 +288,7 @@ function printHelp() {
     '    gate     Validate the current change intake and delivery gate',
     '  quick-update Prepare a fast update intake from target + intent',
     '  upgrade    Apply multi-agent instruction and memory upgrades',
+    '  quick-fix  Handle a single-file code/config fix with a fast path',
     '  train      Train multiple agents and sync training memory and docs',
     '  eval       Simulate, score, compare, and promote evaluation runs',
     '  memory    Read or update layered memory files',
@@ -1186,6 +1190,189 @@ function handleQuickUpdate(workspace, flags, positional) {
   console.log(renderChangeTaskLock(scaffoldedIntake));
   console.log(renderChangePreview(scaffoldedIntake, report));
   console.log(`Gate status: ${report.ready ? 'Ready' : 'Blocked'}`);
+}
+
+function detectQuickFixCandidate(repoRoot) {
+  const status = collectGitStatus(repoRoot);
+  if (status.length !== 1) {
+    return null;
+  }
+  const entry = status[0];
+  if (!isQuickFixFile(entry.file)) {
+    return null;
+  }
+  return {
+    target: entry.file,
+    agent: inferQuickFixAgent(entry.file),
+    skill: inferQuickFixSkill(entry.file),
+    checks: ['target changed', 'single file', 'code/config only'],
+    reason: `single code/config file touched: ${entry.file}`,
+    risk: 'Low - single file, no cross-file state',
+    change: inferQuickFixChange(entry.file),
+    scope: inferQuickFixScope(entry.file),
+  };
+}
+
+function buildQuickFixReport(workspace, candidate, hostName) {
+  const now = new Date().toISOString();
+  const memoryPath = resolveHostMemoryPath(workspace.repoRoot, hostName, 'change');
+  const memoryLine = `Quick fix lesson: ${candidate.change}; target: ${candidate.target}; scope: ${candidate.scope}.`;
+  return {
+    kind: 'agent-system-quick-fix',
+    version: 1,
+    activeProfile: workspace.activeProfileName,
+    activeHost: hostName,
+    generatedAt: now,
+    target: candidate.target,
+    agent: candidate.agent,
+    skill: candidate.skill,
+    checks: candidate.checks,
+    reason: candidate.reason,
+    risk: candidate.risk,
+    change: candidate.change,
+    scope: candidate.scope,
+    targetChanged: true,
+    noSideEffects: true,
+    codeConfigOnly: true,
+    ready: true,
+    memoryPath,
+    memoryLine,
+  };
+}
+
+function writeQuickFixRecord(workspace, report) {
+  const current = {
+    kind: report.kind,
+    version: report.version,
+    type: 'quick-fix',
+    name: path.basename(report.target).replace(/\.[^.]+$/, ''),
+    target: report.target,
+    intent: report.change,
+    processSkill: 'quick-fix',
+    routeSelected: 'quick-fix',
+    classification: [report.scope],
+    ownedDomains: [report.scope],
+    baselineFile: 'n/a',
+    regressionMatrix: 'n/a',
+    oldNewMapping: 'n/a',
+    stopLineRisks: [],
+    sourceFiles: [report.target],
+    ready: report.ready,
+    state: report.ready ? 'ready' : 'blocked',
+    createdAt: report.generatedAt,
+    scoutedAt: report.generatedAt,
+    scaffoldedAt: report.generatedAt,
+    updatedAt: report.generatedAt,
+    gatedAt: report.generatedAt,
+    profile: workspace.activeProfileName,
+    host: report.activeHost,
+    quickFix: true,
+    agent: report.agent,
+    skill: report.skill,
+  };
+  scaffoldChangeWorkspace(workspace, current);
+  writeChangeRecord(workspace, current, 'quick-fix');
+}
+
+function captureQuickFixMemory(workspace, report) {
+  ensureMemoryChangeFile(workspace.repoRoot, report.activeHost);
+  appendMemoryEntry(report.memoryPath, report.memoryLine);
+}
+
+function isQuickFixFile(file) {
+  const text = String(file || '').toLowerCase();
+  if (!text) return false;
+  if (text.startsWith('docs/') || text.startsWith('memory/') || text.startsWith('change/') || text.startsWith('status/')) {
+    return false;
+  }
+  const base = path.posix.basename(text);
+  const configNames = new Set([
+    'package.json',
+    'agent-system.json',
+    '.gitignore',
+    'tsconfig.json',
+    'jsconfig.json',
+    'eslint.config.js',
+    'eslint.config.mjs',
+    'prettier.config.js',
+    'prettier.config.mjs',
+    'vite.config.js',
+    'vitest.config.js',
+    'rollup.config.js',
+  ]);
+  if (configNames.has(base)) return true;
+  return /\.(mjs|js|cjs|ts|tsx|lua|luau|py|rb|go|rs|c|cc|cpp|h|hpp|json|yml|yaml|toml|ini|env)$/i.test(base);
+}
+
+function inferQuickFixAgent(file) {
+  const lower = String(file || '').toLowerCase();
+  if (lower.includes('package.json') || lower.includes('config') || lower.endsWith('.json')) {
+    return 'Config Keeper';
+  }
+  if (lower.includes('bin/') || lower.endsWith('.mjs') || lower.endsWith('.js') || lower.endsWith('.ts')) {
+    return 'Scriptmaster';
+  }
+  return 'Update Steward';
+}
+
+function inferQuickFixSkill(file) {
+  const lower = String(file || '').toLowerCase();
+  if (lower.includes('package.json') || lower.endsWith('.json') || lower.includes('config')) {
+    return 'config-persistence-migration';
+  }
+  return 'existing-script-feature-injection';
+}
+
+function inferQuickFixChange(file) {
+  const base = path.posix.basename(String(file || 'quick-fix'));
+  if (base === 'package.json' || base.endsWith('.json')) {
+    return `Adjust config in ${file}`;
+  }
+  return `Tighten single-file behavior in ${file}`;
+}
+
+function inferQuickFixScope(file) {
+  const lower = String(file || '').toLowerCase();
+  if (lower.includes('package.json') || lower.endsWith('.json') || lower.includes('config')) {
+    return 'config';
+  }
+  return 'logic';
+}
+
+function handleQuickFix(workspace, flags, positional) {
+  const hostName = normalizeHostName(flags.host || workspace.activeHostName);
+  const candidate = detectQuickFixCandidate(workspace.repoRoot);
+  if (!candidate) {
+    console.error('Usage: agent-system quick-fix (one code/config file must be changed)');
+    process.exit(1);
+  }
+
+  const report = buildQuickFixReport(workspace, candidate, hostName);
+  writeQuickFixRecord(workspace, report);
+  captureQuickFixMemory(workspace, report);
+
+  console.log('[QUICK LOCK]');
+  console.log(`Target: ${report.target}`);
+  console.log(`Change: ${report.change}`);
+  console.log(`Risk: ${report.risk}`);
+  console.log('[QUICK ROUTE]');
+  console.log(`Type: quick-fix`);
+  console.log(`Agent: ${report.agent}`);
+  console.log(`Skill: ${report.skill}`);
+  console.log(`Checks: ${report.checks.join(', ')}`);
+  console.log('[QUICK GATE]');
+  console.log(`Target changed: ${report.targetChanged ? 'yes' : 'no'}`);
+  console.log(`No side effects: ${report.noSideEffects ? 'yes' : 'no'}`);
+  console.log(`Code/config only: ${report.codeConfigOnly ? 'yes' : 'no'}`);
+  console.log(`Ready: ${report.ready ? 'yes' : 'no'}`);
+  console.log('[QUICK MEMORY]');
+  console.log(`Where: ${path.relative(workspace.repoRoot, report.memoryPath)}`);
+  console.log(`What: ${report.memoryLine}`);
+  console.log(`Scope: ${report.scope}`);
+
+  if (!report.ready) {
+    process.exit(1);
+  }
 }
 
 function handleUpgrade(workspace, flags, positional) {
@@ -2223,7 +2410,13 @@ function handleImport(workspace, flags, positional) {
   console.log(`Imported ${imported.profileName}`);
 }
 
-function printRouteSummary(profile, taskText, explain = false) {
+function printRouteSummary(workspace, taskText, explain = false) {
+  const quickFixCandidate = !String(taskText || '').trim() ? detectQuickFixCandidate(workspace.repoRoot) : null;
+  if (quickFixCandidate) {
+    printQuickFixRouteSummary(quickFixCandidate, explain);
+    return;
+  }
+  const profile = workspace.profile;
   const selection = selectTaskType(profile, taskText);
   console.log(`Profile: ${profile.profile} (${profile.name})`);
   console.log(`Task type: ${selection.taskType}`);
@@ -2233,6 +2426,18 @@ function printRouteSummary(profile, taskText, explain = false) {
   console.log(`Tags: ${selection.tags.join(', ') || 'n/a'}`);
   if (explain) {
     console.log(`Why: ${selection.reason}`);
+  }
+}
+
+function printQuickFixRouteSummary(candidate, explain = false) {
+  console.log('[QUICK ROUTE]');
+  console.log(`Type: quick-fix`);
+  console.log(`Target: ${candidate.target}`);
+  console.log(`Agent: ${candidate.agent}`);
+  console.log(`Skill: ${candidate.skill}`);
+  console.log(`Checks: ${candidate.checks.join(', ')}`);
+  if (explain) {
+    console.log(`Why: ${candidate.reason}`);
   }
 }
 
