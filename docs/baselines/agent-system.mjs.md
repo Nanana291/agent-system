@@ -9,7 +9,8 @@
 ## Current Baseline Notes
 
 - `validate` checks the active profile, status files, change files, brain files, training logs, training continuity files, upgrade logs, host learning recovery snapshots, per-host training explain/compare histories, evaluation logs, backup schema, quick-update flow, quick-fix flow, luau-quick flow, luau repair flow, upgrade flow, and host memory layout.
-- `lint` enforces manifest consistency, memory drift checks, brain presence, status presence, change presence, pack presence, training presence, training continuity presence, upgrade presence, recovery presence, host training audit presence, evaluation presence, backup schema presence, quick-update coverage, quick-fix coverage, luau-quick coverage, luau-repair coverage, upgrade coverage, and training coverage.
+- `validate` also checks the materialized upgrade trail: `docs/upgrade/current.json`, `docs/upgrade/history.jsonl`, and `docs/upgrade/sessions/README.md`.
+- `lint` enforces manifest consistency, memory drift checks, brain presence, status presence, change presence, pack presence, training presence, training continuity presence, upgrade presence, recovery presence, host training audit presence, evaluation presence, backup schema presence, quick-update coverage, quick-fix coverage, luau-quick coverage, luau-repair coverage, upgrade coverage, delivery-check coverage, and training coverage.
 - `validate` and `lint` should keep their current contract but surface clearer path-by-path failure messages when a file or schema is missing.
 - `status` owns presence, heartbeat, and session attachment.
 - `memory` owns review, compress, teach, gate, reflect, learning pack generation, and host learning recovery per host.
@@ -18,7 +19,7 @@
 - `memory snapshot`, `memory restore`, `memory diff`, and `memory rollback` own host learning recovery snapshots.
 - `change` owns intake analysis, scaffold generation, preview/apply, rollback, and gate validation.
 - `backup`, `restore`, and `bundle` own portable snapshot capture, validation, diffing, and pruning.
-- `brain` owns the structured second brain, current materialization, event history, snapshots, diffing, and recovery.
+- `brain` owns the structured second brain, current materialization, event history, snapshots, diffing, recovery, and dedupe reporting.
 - `brain` should preserve stable current materialization across repeated reads so diff and snapshot flows are not driven by timestamp churn.
 - `quick-update` owns fast update intake preparation from target and intent without git-diff dependence.
 - `quick-fix` owns single-file code/config fixes with a fast lock, fast gate, and quick memory capture.
@@ -41,6 +42,7 @@
 - `memory gate` can demote weak host lessons into `memory/change/<host>.md` automatically when host memory is not ready.
 - `upgrade` owns the learning-aware multi-agent upgrade pipeline, including per-agent lesson derivation, persistence, and sync.
 - `upgrade preview`, `upgrade learn`, `upgrade apply`, `upgrade sync`, `upgrade report`, `upgrade status`, and `upgrade replay` expose the upgrade phases without hiding the pipeline behind a single sync block.
+- `upgrade` also leaves an executable release trail through `upgrade apply`, `upgrade sync`, `upgrade replay`, and `delivery-check`.
 - `upgrade docs`, `upgrade profile`, `upgrade memory`, and `upgrade hosts` keep the compatibility sync scopes available for narrower writes.
 - `train` owns multi-agent training sync, durable lesson capture, and the append-only training log.
 - `eval` owns simulation, scoring, comparison, and promotion of durable evaluation lessons.

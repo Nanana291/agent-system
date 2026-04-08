@@ -5,6 +5,8 @@ import path from 'node:path';
 import process from 'node:process';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { buildDeliveryGateReport, renderDeliveryGate } from '../lib/artifacts.mjs';
+import { buildBrainDedupeReport, renderBrainDedupeReport } from '../lib/brain-hygiene.mjs';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -37,6 +39,9 @@ async function main() {
       return;
     case 'quick-update':
       handleQuickUpdate(workspace, flags, positional);
+      return;
+    case 'delivery-check':
+      handleDeliveryCheck(workspace);
       return;
     case 'upgrade':
       handleUpgrade(workspace, flags, positional);
@@ -389,6 +394,7 @@ function printHelp() {
     '    rollback Restore the last committed change intake snapshot',
     '    gate     Validate the current change intake and delivery gate',
     '  quick-update Prepare a fast update intake from target + intent',
+    '  delivery-check Validate the executable delivery gate for the current workspace',
     '  upgrade    Run the learning-aware upgrade pipeline',
     '    preview  Inspect the target without writing files',
     '    learn    Derive and persist per-agent lessons',
@@ -448,11 +454,13 @@ function printHelp() {
     '    promote  Promote a brain entry to a stronger scope',
     '    demote   Demote a brain entry to a weaker scope',
     '    prune    Rebuild the brain index and drop duplicate noise',
+    '    dedupe   Report deterministic merge candidates for duplicate notes',
     '    snapshot Capture the current brain state',
     '    restore  Restore the brain from a snapshot',
     '    diff     Compare the current brain state against a snapshot',
     '    sync     Rebuild the materialized brain index',
     '  backup    Snapshot the current mutable workspace state',
+    '    validate Validate a generated backup bundle',
     '  restore   Restore a previously captured backup snapshot',
     '  bundle    Validate, diff, or prune backup bundles',
     '  status     Read or update live agent presence',
@@ -735,6 +743,9 @@ function handleValidate(workspace) {
   if (!fs.existsSync(upgradeReadmePath)) {
     issues.push(`missing upgrade readme: ${path.relative(repoRoot, upgradeReadmePath)}`);
   }
+  if (!fs.existsSync(path.join(repoRoot, 'docs', 'upgrade', 'sessions', 'README.md'))) {
+    issues.push('missing upgrade sessions readme: docs/upgrade/sessions/README.md');
+  }
   if (!fs.existsSync(brainReadmePath)) {
     issues.push(`missing brain readme: ${path.relative(repoRoot, brainReadmePath)}`);
   }
@@ -858,6 +869,14 @@ function handleGate(text) {
   console.log(`Blocked / Ready: ${missing.length === 0 ? 'Ready' : 'Blocked'}`);
   if (missing.length > 0) {
     console.log(`Missing fields: ${missing.join(', ')}`);
+    process.exit(1);
+  }
+}
+
+function handleDeliveryCheck(workspace) {
+  const report = buildDeliveryGateReport(workspace);
+  console.log(renderDeliveryGate(report));
+  if (report.blockedOrReady !== 'Ready') {
     process.exit(1);
   }
 }
@@ -4402,6 +4421,10 @@ function handleBrain(workspace, flags, positional) {
     handleBrainPrune(workspace);
     return;
   }
+  if (action === 'dedupe') {
+    handleBrainDedupe(workspace, flags, positional.slice(1));
+    return;
+  }
   if (action === 'snapshot') {
     handleBrainSnapshot(workspace, flags, positional.slice(1));
     return;
@@ -4604,6 +4627,11 @@ function handleBrainSync(workspace) {
   console.log(`Profile: ${current.activeProfile}`);
   console.log(`Entries: ${current.counts.total}`);
   console.log(`Status counts: active=${current.counts.active}, candidate=${current.counts.candidate}, demoted=${current.counts.demoted}, archived=${current.counts.archived}`);
+}
+
+function handleBrainDedupe(workspace, flags, positional) {
+  const report = buildBrainDedupeReport(workspace, flags.scope || positional[0] || 'all');
+  console.log(renderBrainDedupeReport(report));
 }
 
 function handleBrainList(workspace, flags, positional) {
@@ -5432,6 +5460,7 @@ function buildLintReport(workspace) {
     ['upgrade snapshot exists', () => fs.existsSync(workspace.upgradeCurrentPath)],
     ['upgrade history exists', () => fs.existsSync(workspace.upgradeHistoryPath)],
     ['upgrade readme exists', () => fs.existsSync(workspace.upgradeReadmePath)],
+    ['upgrade sessions readme exists', () => fs.existsSync(path.join(workspace.repoRoot, 'docs', 'upgrade', 'sessions', 'README.md'))],
     ['training recovery readme exists', () => fs.existsSync(path.join(workspace.repoRoot, workspace.manifest.training?.recovery || 'docs/training/recovery', 'README.md'))],
     ['brain readme exists', () => fs.existsSync(workspace.brainReadmePath)],
     ['brain schema exists', () => fs.existsSync(workspace.brainSchemaPath)],
@@ -5445,6 +5474,9 @@ function buildLintReport(workspace) {
     ['luau repair snapshot exists', () => fs.existsSync(path.join(workspace.repoRoot, 'docs', 'luau', 'current.json'))],
     ['luau repair history exists', () => fs.existsSync(path.join(workspace.repoRoot, 'docs', 'luau', 'history.jsonl'))],
     ['luau repair log exists', () => fs.existsSync(path.join(workspace.repoRoot, 'docs', 'luau', 'repair-log.md'))],
+    ['delivery-check wrapper exists', () => fs.existsSync(path.join(workspace.repoRoot, 'bin', 'delivery-check.mjs'))],
+    ['backup validate wrapper exists', () => fs.existsSync(path.join(workspace.repoRoot, 'bin', 'backup-validate.mjs'))],
+    ['brain dedupe wrapper exists', () => fs.existsSync(path.join(workspace.repoRoot, 'bin', 'brain-dedupe.mjs'))],
     ['command script exists', () => fs.existsSync(path.join(workspace.repoRoot, 'bin', 'agent-system.mjs'))],
     ['memory audit clean', () => auditMemory(workspace.repoRoot, workspace.manifest, workspace.profile, workspace.activeHostName).ok],
   ];

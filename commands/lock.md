@@ -4,6 +4,8 @@ description: Emit a TASK LOCK using the active profile and selected route
 
 Use the active profile and task details to emit a valid `[TASK LOCK]`.
 
+If the task touches release proof, call out the executable wrapper or gate that will validate it.
+
 Requirements:
 
 - do not invent agents outside the selected profile route

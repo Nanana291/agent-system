@@ -12,6 +12,8 @@ Work in this order:
 4. Return the selected route, ordered agents, required skills, required artifacts, and stop-line risks.
 5. If no exact task type matches, say so and explain the fallback used.
 
+If the task is about release proof rather than feature routing, mention the executable check that closes it.
+
 Return a compact routing block with:
 
 - `profile`

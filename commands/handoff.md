@@ -4,6 +4,8 @@ description: Emit a HANDOFF block for the current owner stage
 
 Use the active profile and current stage context to emit a valid `[HANDOFF]`.
 
+If the handoff depends on `upgrade replay`, `brain dedupe`, or `delivery-check`, name the wrapper that owns the proof trail.
+
 Requirements:
 
 - state what changed

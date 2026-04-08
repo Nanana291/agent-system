@@ -32,6 +32,13 @@ function runAgent(args, cwd) {
   });
 }
 
+function runWrapper(wrapperName, cwd, args = []) {
+  return spawnSync('node', [path.join(repoRoot, 'bin', wrapperName), ...args], {
+    cwd,
+    encoding: 'utf8',
+  });
+}
+
 test('backup creates a full mutable-state bundle with explicit host metadata', () => {
   const workspace = createWorkspace();
   try {
@@ -70,6 +77,22 @@ test('bundle validate rejects incomplete snapshots and bundle diff reports diffe
     const diff = runAgent(['bundle', 'diff', '--file', bundlePath], workspace);
     assert.equal(diff.status, 0, diff.stderr);
     assert.match(diff.stdout, /\[BUNDLE DIFF\]/);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('backup validate wrapper validates a generated bundle', () => {
+  const workspace = createWorkspace();
+  try {
+    const bundlePath = path.join(workspace, 'wrapper-backup.json');
+    const backup = runAgent(['backup', '--profile', 'imphub', '--host', 'qwen', bundlePath], workspace);
+    assert.equal(backup.status, 0, backup.stderr);
+
+    const validate = runWrapper('backup-validate.mjs', workspace, [bundlePath]);
+    assert.equal(validate.status, 0, validate.stderr);
+    assert.match(validate.stdout, /\[BUNDLE VALIDATE\]/);
+    assert.match(validate.stdout, /Ready: yes/);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }

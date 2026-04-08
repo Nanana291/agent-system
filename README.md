@@ -68,13 +68,13 @@ Short form:
 qwen extensions install Nanana291/agent-system
 ```
 
-## V0.6.3 scope
+## V0.6.4 scope
 
-This release turns `/upgrade` into a learning-aware pipeline instead of a passive sync. `upgrade preview`, `upgrade learn`, `upgrade apply`, `upgrade sync`, `upgrade report`, `upgrade status`, and `upgrade replay` now expose explicit phases, while `upgrade` itself runs the full learning-aware cycle.
+This release keeps `/upgrade` as a learning-aware pipeline, but closes the release-critical proof gap with executable enforcement. `upgrade preview`, `upgrade learn`, `upgrade apply`, `upgrade sync`, `upgrade report`, `upgrade status`, `upgrade replay`, and the new `delivery-check` gate now make the upgrade trail and delivery closure verifiable instead of markdown-only.
 
-The upgrade pipeline is per-agent. It learns from the active target, dedupes lessons against prior upgrade history, writes a durable upgrade snapshot in `docs/upgrade/current.json`, appends `docs/upgrade/history.jsonl`, and syncs the learned result into the profile doc plus host memory. The structured brain still receives the durable upgrade trace so the same lesson can be queried later.
+The upgrade pipeline is still per-agent. It learns from the active target, dedupes lessons against prior upgrade history, writes a durable upgrade snapshot in `docs/upgrade/current.json`, appends `docs/upgrade/history.jsonl`, and syncs the learned result into the profile doc plus host memory. Upgrade sessions stay materialized under `docs/upgrade/sessions/` so replay can compare the current docs against the last known good snapshot.
 
-The brain remains event-sourced and fed by `change`, `train`, `eval`, `memory`, `upgrade`, and recovery flows. Durable lessons continue to land in `docs/brain/current.json` and `docs/brain/history.jsonl`, then sync into host and profile memory once they stabilize.
+The brain remains event-sourced and fed by `change`, `train`, `eval`, `memory`, `upgrade`, and recovery flows. Durable lessons continue to land in `docs/brain/current.json` and `docs/brain/history.jsonl`, then sync into host and profile memory once they stabilize. Brain hygiene now has a deterministic dedupe path so duplicate notes can be surfaced and consolidated.
 
 Learning recovery still exists: `memory snapshot`, `memory restore`, `memory diff`, `memory rollback`, and `train rollback` preserve host learning state as a recoverable snapshot. Training packs remain versioned, host histories stay separated, and Luau repair / Luau learning still feed the training loop automatically.
 
@@ -182,6 +182,13 @@ node ./bin/agent-system.mjs upgrade replay
 node ./bin/agent-system.mjs upgrade profile
 node ./bin/agent-system.mjs upgrade memory
 node ./bin/agent-system.mjs upgrade hosts
+node ./bin/delivery-check.mjs
+node ./bin/upgrade-apply.mjs
+node ./bin/upgrade-sync.mjs
+node ./bin/upgrade-replay.mjs
+node ./bin/brain-query.mjs fallback
+node ./bin/brain-dedupe.mjs --scope host:qwen
+node ./bin/backup-validate.mjs ./agent-system-backup.json
 node ./bin/agent-system.mjs backup ./agent-system-backup.json
 node ./bin/agent-system.mjs restore --file ./agent-system-backup.json
 node ./bin/agent-system.mjs bundle validate --file ./agent-system-backup.json

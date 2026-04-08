@@ -1,11 +1,12 @@
 # Upgrade Log
 
-This directory stores the learning-aware `/upgrade` pipeline.
+This directory stores the learning-aware `/upgrade` pipeline and the executable delivery proof trail.
 
 ## Files
 
 - `current.json` holds the latest upgrade learning state.
 - `history.jsonl` stores append-only upgrade runs.
+- `sessions/README.md` describes the session folder contract.
 - `sessions/<session>.md` stores one human-readable summary per upgrade session.
 
 ## Policy
@@ -17,3 +18,4 @@ This directory stores the learning-aware `/upgrade` pipeline.
 - `upgrade report` prints the latest upgrade learning state.
 - `upgrade status` is a read-only alias for the latest upgrade learning state.
 - `upgrade replay` compares a historical upgrade session against the current target.
+- `delivery-check` requires the upgrade artifacts to exist before release closure.
