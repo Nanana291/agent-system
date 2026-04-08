@@ -1,6 +1,6 @@
 {
   "name": "agent-system",
-  "version": "0.6.4",
+  "version": "0.6.4.3",
   "private": true,
   "type": "module",
   "description": "Agent-system CLI for validation, routing, sync, memory, and profile maintenance.",
@@ -72,7 +72,8 @@
     "luau-repair": "node ./bin/agent-system.mjs luau-repair",
     "luau-gate": "node ./bin/agent-system.mjs luau-gate",
     "train": "node ./bin/agent-system.mjs train",
-    "luau-train": "node ./bin/agent-system.mjs luau-train",
+    "luau-train": "node ./bin/agent-system.mjs train --luau",
+    "upgrade-status": "node ./bin/agent-system.mjs upgrade status",
     "upgrade-apply": "node ./bin/upgrade-apply.mjs",
     "upgrade-sync": "node ./bin/upgrade-sync.mjs",
     "upgrade-replay": "node ./bin/upgrade-replay.mjs",

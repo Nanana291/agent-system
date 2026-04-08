@@ -15,10 +15,12 @@ function runAgent(args, cwd = repoRoot) {
   });
 }
 
-test('release surface includes executable enforcement wrappers and version 0.6.4', () => {
+test('release surface includes executable enforcement wrappers, aliases, and version 0.6.4.3', () => {
   const pkg = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
 
-  assert.equal(pkg.version, '0.6.4');
+  assert.equal(pkg.version, '0.6.4.3');
+  assert.equal(pkg.scripts['luau-train'], 'node ./bin/agent-system.mjs train --luau');
+  assert.equal(pkg.scripts['upgrade-status'], 'node ./bin/agent-system.mjs upgrade status');
   assert.equal(existsSync(path.join(repoRoot, 'bin', 'delivery-check.mjs')), true);
   assert.equal(existsSync(path.join(repoRoot, 'bin', 'upgrade-apply.mjs')), true);
   assert.equal(existsSync(path.join(repoRoot, 'bin', 'upgrade-sync.mjs')), true);
