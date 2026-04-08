@@ -67,11 +67,11 @@ Short form:
 qwen extensions install Nanana291/agent-system
 ```
 
-## V0.5.4 scope
+## V0.5.5 scope
 
-This release adds a Luau-specific fast path on top of the existing quick-fix flow. When the workspace has exactly one touched Luau file, `luau-quick` can write a Luau lock, gate, and memory note directly into the active host memory while `route` still keeps the generic quick-fix path available for single-file code and config changes.
+This release turns Luau into a learning loop, not just a fast path. `luau-quick` still handles the one-file Luau fix path, but `train` and `eval` now auto-detect Luau work, write Luau-focused lessons into the training and evaluation logs, and sync those lessons into host memory so the next Luau run starts with better context.
 
-The earlier evaluation loop remains in place: the repository can still simulate a run, score it, compare it against the last evaluation, and promote the durable lessons into the active profile and host memories when the score clears the threshold.
+The earlier evaluation loop remains in place: the repository can still simulate a run, score it, compare it against the last evaluation, and promote the durable lessons into the active profile and host memories when the score clears the threshold. The new Luau-specific aliases `luau-train` and `luau-eval` expose the same loop directly when you want to force the focus.
 
 ## Memory layer
 
@@ -110,11 +110,13 @@ node ./bin/agent-system.mjs memory reflect --host qwen
 node ./bin/agent-system.mjs memory packs generate --host qwen
 node ./bin/agent-system.mjs memory packs list --host qwen
 node ./bin/agent-system.mjs train
+node ./bin/agent-system.mjs luau-train
 node ./bin/agent-system.mjs train error --host qwen
 node ./bin/agent-system.mjs train replay --host qwen
 node ./bin/agent-system.mjs quick-fix --host qwen
 node ./bin/agent-system.mjs luau-quick --host qwen
 node ./bin/agent-system.mjs eval
+node ./bin/agent-system.mjs luau-eval
 node ./bin/agent-system.mjs eval compare --host qwen
 node ./bin/agent-system.mjs eval promote --host qwen
 node ./bin/agent-system.mjs status show

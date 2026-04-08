@@ -50,8 +50,14 @@ async function main() {
     case 'train':
       handleTrain(workspace, flags, positional);
       return;
+    case 'luau-train':
+      handleTrain(workspace, { ...flags, luau: true }, positional);
+      return;
     case 'eval':
       handleEval(workspace, flags, positional);
+      return;
+    case 'luau-eval':
+      handleEval(workspace, { ...flags, luau: true }, positional);
       return;
     case 'route':
       printRouteSummary(workspace, await readTaskText(positional));
@@ -294,7 +300,9 @@ function printHelp() {
     '  quick-fix  Handle a single-file code/config fix with a fast path',
     '  luau-quick Handle a single-file Luau fix with a Luau-specific fast path',
     '  train      Train multiple agents and sync training memory and docs',
+    '  luau-train Train Luau-aware lessons and sync Luau memory focus',
     '  eval       Simulate, score, compare, and promote evaluation runs',
+    '  luau-eval  Simulate and score Luau-aware evaluation runs',
     '  memory    Read or update layered memory files',
     '    search   Search memory files for matching text',
     '    promote  Promote a memory rule between scopes',
@@ -1494,7 +1502,7 @@ function handleTrain(workspace, flags, positional) {
     process.exit(1);
   }
   const hostName = normalizeHostName(flags.host || workspace.activeHostName);
-  const report = buildTrainingReport(workspace, hostName, mode);
+  const report = buildTrainingReport(workspace, hostName, mode, { luau: Boolean(flags.luau) });
   syncTrainingArtifacts(workspace, report);
   writeTrainingRecord(workspace, report);
   captureTrainingMemory(workspace, report);
@@ -1502,10 +1510,14 @@ function handleTrain(workspace, flags, positional) {
   console.log('[TRAIN]');
   console.log(`Mode: ${report.mode}`);
   console.log(`Outcome: ${report.outcome}`);
+  console.log(`Focus: ${report.focus || 'general'}`);
   console.log(`Agents trained: ${report.agents.length}`);
   console.log(`Training log: ${path.relative(workspace.repoRoot, report.summaryPath)}`);
   for (const agent of report.agents) {
     console.log(`- ${agent.title}`);
+  }
+  if (report.luauLesson) {
+    console.log(`Luau lesson: ${report.luauLesson}`);
   }
 }
 
@@ -1519,22 +1531,28 @@ function handleEval(workspace, flags, positional) {
 
   const hostName = normalizeHostName(flags.host || workspace.activeHostName);
   const threshold = parseCount(flags.threshold, 75);
-  const report = buildEvaluationReport(workspace, hostName, mode, threshold);
+  const report = buildEvaluationReport(workspace, hostName, mode, threshold, { luau: Boolean(flags.luau) });
   writeEvaluationRecord(workspace, report);
   writeEvaluationSummary(workspace, report);
+  if (report.promoted || report.luauLesson) {
+    captureEvaluationMemory(workspace, report);
+  }
   if (report.promoted) {
     syncEvaluationPromotions(workspace, report);
-    captureEvaluationMemory(workspace, report);
   }
 
   console.log('[EVAL]');
   console.log(`Mode: ${report.mode}`);
+  console.log(`Focus: ${report.focus || 'general'}`);
   console.log(`Score: ${report.score}`);
   console.log(`Verdict: ${report.verdict}`);
   console.log(`Compared against: ${report.comparedTo}`);
   console.log(`Delta: ${report.delta}`);
   console.log(`Promoted: ${report.promoted ? 'yes' : 'no'}`);
   console.log(`Evaluation log: ${path.relative(workspace.repoRoot, report.summaryPath)}`);
+  if (report.luauLesson) {
+    console.log(`Luau lesson: ${report.luauLesson}`);
+  }
 }
 
 function normalizeTrainMode(value) {
@@ -1553,13 +1571,21 @@ function normalizeEvalMode(value) {
   return value ? 'invalid' : 'simulate';
 }
 
-function buildEvaluationReport(workspace, hostName, mode, threshold) {
+function buildEvaluationReport(workspace, hostName, mode, threshold, flags = {}) {
   const now = new Date().toISOString();
   const current = readEvalCurrent(workspace);
   const history = readEvalHistory(workspace);
   const previous = history[history.length - 1] || current;
+  const luauContext = getLuauLearningContext(workspace, flags);
   const scoreReport = scoreEvaluationState(workspace, hostName);
-  const score = scoreReport.score;
+  const findings = [...scoreReport.findings];
+  const lessons = [...scoreReport.lessons];
+  let score = scoreReport.score;
+  if (luauContext.active) {
+    score = Math.min(100, score + 10);
+    findings.push('Luau learning context active');
+    lessons.push(luauContext.evaluationLesson);
+  }
   const delta = typeof previous.score === 'number' ? score - previous.score : 0;
   const verdict = score >= threshold ? 'pass' : 'retry';
   const comparedTo = previous.sessionId || 'baseline';
@@ -1573,6 +1599,8 @@ function buildEvaluationReport(workspace, hostName, mode, threshold) {
     outcome: mode === 'promote' ? (promoted ? 'promoted' : 'blocked') : mode === 'compare' ? 'compared' : 'simulated',
     activeProfile: workspace.activeProfileName,
     activeHost: hostName,
+    focus: luauContext.active ? luauContext.focus : 'general',
+    language: luauContext.active ? luauContext.language : 'general',
     sessionId,
     generatedAt: now,
     threshold,
@@ -1581,8 +1609,9 @@ function buildEvaluationReport(workspace, hostName, mode, threshold) {
     delta,
     comparedTo,
     promoted,
-    findings: scoreReport.findings,
-    lessons: scoreReport.lessons,
+    findings,
+    lessons,
+    luauLesson: luauContext.active ? luauContext.evaluationLesson : '',
     summaryPath,
     current,
   };
@@ -1670,6 +1699,8 @@ function writeEvaluationRecord(workspace, report) {
     outcome: report.outcome,
     activeProfile: report.activeProfile,
     activeHost: report.activeHost,
+    focus: report.focus,
+    language: report.language,
     sessionId: report.sessionId,
     generatedAt: report.generatedAt,
     threshold: report.threshold,
@@ -1680,6 +1711,7 @@ function writeEvaluationRecord(workspace, report) {
     promoted: report.promoted,
     findings: report.findings,
     lessons: report.lessons,
+    luauLesson: report.luauLesson,
     summaryPath: path.relative(workspace.repoRoot, report.summaryPath),
   };
   fs.mkdirSync(path.dirname(workspace.evalCurrentPath), { recursive: true });
@@ -1723,6 +1755,9 @@ function captureEvaluationMemory(workspace, report) {
   const changePath = resolveHostMemoryPath(workspace.repoRoot, report.activeHost, 'change');
   ensureMemoryChangeFile(workspace.repoRoot, report.activeHost);
   appendMemoryEntry(changePath, `Evaluation lesson: score ${report.score}, verdict ${report.verdict}, mode ${report.mode}.`);
+  if (report.luauLesson) {
+    appendMemoryEntry(changePath, report.luauLesson);
+  }
 }
 
 function renderEvaluationSyncBlock(report, scope = 'docs') {
@@ -1733,6 +1768,7 @@ function renderEvaluationSyncBlock(report, scope = 'docs') {
   lines.push(`Generated: ${report.generatedAt}`);
   lines.push(`Profile: ${report.activeProfile}`);
   lines.push(`Host focus: ${report.activeHost}`);
+  lines.push(`Focus: ${report.focus || 'general'}`);
   lines.push(`Mode: ${report.mode}`);
   lines.push(`Score: ${report.score}`);
   lines.push(`Verdict: ${report.verdict}`);
@@ -1746,6 +1782,11 @@ function renderEvaluationSyncBlock(report, scope = 'docs') {
   lines.push('### Evaluation Lesson');
   for (const lesson of report.lessons) {
     lines.push(`- ${lesson}`);
+  }
+  if (report.luauLesson) {
+    lines.push('');
+    lines.push('### Luau Focus');
+    lines.push(`- ${report.luauLesson}`);
   }
   lines.push('');
   lines.push('### Host Sync');
@@ -1763,6 +1804,7 @@ function renderEvaluationSummaryDoc(report) {
   lines.push(`- Outcome: ${report.outcome}`);
   lines.push(`- Profile: ${report.activeProfile}`);
   lines.push(`- Host: ${report.activeHost}`);
+  lines.push(`- Focus: ${report.focus || 'general'}`);
   lines.push(`- Score: ${report.score}`);
   lines.push(`- Verdict: ${report.verdict}`);
   lines.push(`- Compared against: ${report.comparedTo}`);
@@ -1779,6 +1821,12 @@ function renderEvaluationSummaryDoc(report) {
   for (const lesson of report.lessons) {
     lines.push(`- ${lesson}`);
   }
+  if (report.luauLesson) {
+    lines.push('');
+    lines.push('## Luau Focus');
+    lines.push('');
+    lines.push(`- ${report.luauLesson}`);
+  }
   return lines.join('\n').trimEnd() + '\n';
 }
 
@@ -1791,6 +1839,8 @@ function readEvalCurrent(workspace) {
       outcome: 'idle',
       activeProfile: workspace.activeProfileName,
       activeHost: workspace.activeHostName,
+      focus: 'general',
+      language: 'general',
       sessionId: '',
       generatedAt: '',
       threshold: 75,
@@ -1801,6 +1851,7 @@ function readEvalCurrent(workspace) {
       promoted: false,
       findings: [],
       lessons: [],
+      luauLesson: '',
       summaryPath: '',
     };
   }
@@ -1814,6 +1865,8 @@ function readEvalCurrent(workspace) {
       outcome: 'idle',
       activeProfile: workspace.activeProfileName,
       activeHost: workspace.activeHostName,
+      focus: 'general',
+      language: 'general',
       sessionId: '',
       generatedAt: '',
       threshold: 75,
@@ -1824,6 +1877,7 @@ function readEvalCurrent(workspace) {
       promoted: false,
       findings: [],
       lessons: [],
+      luauLesson: '',
       summaryPath: '',
     };
   }
@@ -1847,16 +1901,18 @@ function readEvalHistory(workspace) {
   return entries;
 }
 
-function buildTrainingReport(workspace, hostName, mode) {
+function buildTrainingReport(workspace, hostName, mode, flags = {}) {
   const now = new Date().toISOString();
   const current = readTrainingCurrent(workspace);
   const history = readTrainingHistory(workspace);
   const latest = mode === 'replay' ? history[history.length - 1] || current : current;
   const agents = buildTrainingAgents(workspace.profile);
+  const luauContext = getLuauLearningContext(workspace, flags);
   const outcome = mode === 'error' ? 'held' : mode === 'review' ? 'reviewed' : mode === 'replay' ? 'replayed' : mode === 'promote' ? 'promoted' : 'applied';
   const sessionId = `${now.replace(/[:.]/g, '-')}-${hostName}-${mode}`;
   const summaryPath = path.join(workspace.trainingDir, `${sessionId}.md`);
   const lesson = buildTrainingLesson(mode, hostName, latest, agents, workspace.profile);
+  const luauLesson = luauContext.active ? luauContext.trainingLesson : '';
 
   return {
     kind: 'agent-system-training',
@@ -1865,10 +1921,13 @@ function buildTrainingReport(workspace, hostName, mode) {
     outcome,
     activeProfile: workspace.activeProfileName,
     activeHost: hostName,
+    focus: luauContext.active ? luauContext.focus : 'general',
+    language: luauContext.active ? luauContext.language : 'general',
     sessionId,
     generatedAt: now,
     agents,
     lesson,
+    luauLesson,
     summaryPath,
     current,
     latest,
@@ -1932,6 +1991,36 @@ function buildTrainingLesson(mode, hostName, source, agents, profile) {
   return `Training lesson: keep ${visibleAgents || 'the active agents'} aligned with the active profile, preserve the owned domains, and mirror durable notes into ${hostName} memory. Source mode: ${sourceMode}.`;
 }
 
+function getLuauLearningContext(workspace, flags = {}) {
+  const intake = readChangeCurrent(workspace);
+  const sourceFiles = Array.isArray(intake.sourceFiles) ? intake.sourceFiles : [];
+  const candidate = [intake.target, ...sourceFiles].find((file) => isLuauQuickFile(file));
+  const active = Boolean(flags.luau || intake.luauQuick || intake.language === 'Luau' || candidate);
+  if (!active) {
+    return {
+      active: false,
+      focus: 'general',
+      language: 'general',
+      target: '',
+      trainingLesson: '',
+      evaluationLesson: '',
+    };
+  }
+
+  const target = candidate || intake.target || 'Luau script';
+  const base = path.posix.basename(target || 'Luau script');
+  const trainingLesson = `Luau lesson: keep ${base} hot-path safe, preserve host-local memory, and prefer the Luau quick gate for one-file changes.`;
+  const evaluationLesson = `Luau lesson: score ${base} against hot-path safety, remote discipline, and host-scoped memory before promotion.`;
+  return {
+    active: true,
+    focus: 'Luau',
+    language: 'Luau',
+    target,
+    trainingLesson,
+    evaluationLesson,
+  };
+}
+
 function syncTrainingArtifacts(workspace, report) {
   const rootBlock = renderTrainingSyncBlock(report, 'docs');
   const memoryBlock = renderTrainingSyncBlock(report, 'memory');
@@ -1977,6 +2066,11 @@ function renderTrainingSyncBlock(report, scope) {
   }
   lines.push('### Learning Rule');
   lines.push(`- ${report.lesson}`);
+  if (report.luauLesson) {
+    lines.push('');
+    lines.push('### Luau Focus');
+    lines.push(`- ${report.luauLesson}`);
+  }
   lines.push('');
   lines.push('### Host Sync');
   lines.push(`- ${report.activeHost}: training lessons and memory are synchronized from this pass.`);
@@ -1998,6 +2092,12 @@ function renderTrainingSummaryDoc(report) {
   lines.push('## Lesson');
   lines.push('');
   lines.push(`- ${report.lesson}`);
+  if (report.luauLesson) {
+    lines.push('');
+    lines.push('## Luau Focus');
+    lines.push('');
+    lines.push(`- ${report.luauLesson}`);
+  }
   lines.push('');
   lines.push('## Agents');
   lines.push('');
@@ -2020,6 +2120,9 @@ function captureTrainingMemory(workspace, report) {
     ? `Prevention rule: ${report.lesson}`
     : `Training lesson: ${report.lesson}`;
   appendMemoryEntry(changePath, line);
+  if (report.luauLesson) {
+    appendMemoryEntry(changePath, report.luauLesson);
+  }
 }
 
 function writeTrainingRecord(workspace, report) {
@@ -2030,6 +2133,8 @@ function writeTrainingRecord(workspace, report) {
     outcome: report.outcome,
     activeProfile: report.activeProfile,
     activeHost: report.activeHost,
+    focus: report.focus,
+    language: report.language,
     sessionId: report.sessionId,
     generatedAt: report.generatedAt,
     summaryPath: path.relative(workspace.repoRoot, report.summaryPath),
@@ -2039,6 +2144,7 @@ function writeTrainingRecord(workspace, report) {
       domain: agent.domain,
     })),
     lesson: report.lesson,
+    luauLesson: report.luauLesson,
   };
   fs.mkdirSync(path.dirname(workspace.trainingCurrentPath), { recursive: true });
   fs.writeFileSync(workspace.trainingCurrentPath, JSON.stringify(current, null, 2) + '\n', 'utf8');
@@ -2063,11 +2169,14 @@ function readTrainingCurrent(workspace) {
       outcome: 'idle',
       activeProfile: workspace.activeProfileName,
       activeHost: workspace.activeHostName,
+      focus: 'general',
+      language: 'general',
       sessionId: '',
       generatedAt: '',
       summaryPath: '',
       agents: [],
       lesson: '',
+      luauLesson: '',
     };
   }
   try {
@@ -2080,11 +2189,14 @@ function readTrainingCurrent(workspace) {
       outcome: 'idle',
       activeProfile: workspace.activeProfileName,
       activeHost: workspace.activeHostName,
+      focus: 'general',
+      language: 'general',
       sessionId: '',
       generatedAt: '',
       summaryPath: '',
       agents: [],
       lesson: '',
+      luauLesson: '',
     };
   }
 }
