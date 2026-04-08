@@ -8,8 +8,8 @@
 
 ## Current Baseline Notes
 
-- `validate` checks the active profile, status files, change files, brain files, training logs, training continuity files, host learning recovery snapshots, per-host training explain/compare histories, evaluation logs, backup schema, quick-update flow, quick-fix flow, luau-quick flow, luau repair flow, upgrade flow, and host memory layout.
-- `lint` enforces manifest consistency, memory drift checks, brain presence, status presence, change presence, pack presence, training presence, training continuity presence, recovery presence, host training audit presence, evaluation presence, backup schema presence, quick-update coverage, quick-fix coverage, luau-quick coverage, luau-repair coverage, upgrade coverage, and training coverage.
+- `validate` checks the active profile, status files, change files, brain files, training logs, training continuity files, upgrade logs, host learning recovery snapshots, per-host training explain/compare histories, evaluation logs, backup schema, quick-update flow, quick-fix flow, luau-quick flow, luau repair flow, upgrade flow, and host memory layout.
+- `lint` enforces manifest consistency, memory drift checks, brain presence, status presence, change presence, pack presence, training presence, training continuity presence, upgrade presence, recovery presence, host training audit presence, evaluation presence, backup schema presence, quick-update coverage, quick-fix coverage, luau-quick coverage, luau-repair coverage, upgrade coverage, and training coverage.
 - `validate` and `lint` should keep their current contract but surface clearer path-by-path failure messages when a file or schema is missing.
 - `status` owns presence, heartbeat, and session attachment.
 - `memory` owns review, compress, teach, gate, reflect, learning pack generation, and host learning recovery per host.
@@ -39,9 +39,9 @@
 - `train explain` and `train compare` emit per-host audit trails under `docs/training/explain/<host>.jsonl` and `docs/training/compare/<host>.jsonl`.
 - `train packs` reports or regenerates the host training pack after enough continuous cycles accumulate.
 - `memory gate` can demote weak host lessons into `memory/change/<host>.md` automatically when host memory is not ready.
-- `upgrade` owns multi-agent instruction upgrades plus profile and host memory synchronization.
-- `upgrade preview` and `upgrade status` inspect the upgrade target without writing files.
-- `upgrade docs`, `upgrade profile`, `upgrade memory`, and `upgrade hosts` scope the upgrade pass to a narrower set of docs and memory layers.
+- `upgrade` owns the learning-aware multi-agent upgrade pipeline, including per-agent lesson derivation, persistence, and sync.
+- `upgrade preview`, `upgrade learn`, `upgrade apply`, `upgrade sync`, `upgrade report`, `upgrade status`, and `upgrade replay` expose the upgrade phases without hiding the pipeline behind a single sync block.
+- `upgrade docs`, `upgrade profile`, `upgrade memory`, and `upgrade hosts` keep the compatibility sync scopes available for narrower writes.
 - `train` owns multi-agent training sync, durable lesson capture, and the append-only training log.
 - `eval` owns simulation, scoring, comparison, and promotion of durable evaluation lessons.
 

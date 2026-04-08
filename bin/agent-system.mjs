@@ -389,10 +389,14 @@ function printHelp() {
     '    rollback Restore the last committed change intake snapshot',
     '    gate     Validate the current change intake and delivery gate',
     '  quick-update Prepare a fast update intake from target + intent',
-    '  upgrade    Apply multi-agent instruction and memory upgrades',
-    '    apply    Run the full upgrade sync pass',
-    '    preview  Inspect the upgrade target without writing files',
-    '    status   Alias for preview with the current sync scope',
+    '  upgrade    Run the learning-aware upgrade pipeline',
+    '    preview  Inspect the target without writing files',
+    '    learn    Derive and persist per-agent lessons',
+    '    apply    Materialize the learned sync blocks',
+    '    sync     Reapply the stored upgrade state',
+    '    report   Print the latest upgrade learning state',
+    '    status   Alias for report with no writes',
+    '    replay   Compare a historical upgrade session',
     '    docs     Sync only the agent/profile docs, not memory',
     '    profile  Sync only the active profile doc and profile memory',
     '    memory   Sync only memory layers for the active profile/hosts',
@@ -527,6 +531,11 @@ function loadWorkspace(profileName, hostName) {
   const evalHistoryPath = path.join(repoRoot, manifest.eval?.history || 'docs/evals/history.jsonl');
   const evalReadmePath = path.join(repoRoot, manifest.eval?.readme || 'docs/evals/README.md');
   const evalSchemaPath = path.join(repoRoot, manifest.eval?.schema || 'docs/evals-schema.md');
+  const upgradeDir = path.join(repoRoot, manifest.paths?.upgrade || 'docs/upgrade');
+  const upgradeCurrentPath = path.join(repoRoot, manifest.upgrade?.current || 'docs/upgrade/current.json');
+  const upgradeHistoryPath = path.join(repoRoot, manifest.upgrade?.history || 'docs/upgrade/history.jsonl');
+  const upgradeReadmePath = path.join(repoRoot, manifest.upgrade?.readme || 'docs/upgrade/README.md');
+  const upgradeSessionsDir = path.join(repoRoot, manifest.upgrade?.sessions || 'docs/upgrade/sessions');
   const brainDir = path.join(repoRoot, manifest.paths?.brain || 'docs/brain');
   const brainCurrentPath = path.join(repoRoot, manifest.brain?.current || 'docs/brain/current.json');
   const brainHistoryPath = path.join(repoRoot, manifest.brain?.history || 'docs/brain/history.jsonl');
@@ -569,6 +578,11 @@ function loadWorkspace(profileName, hostName) {
     evalHistoryPath,
     evalReadmePath,
     evalSchemaPath,
+    upgradeDir,
+    upgradeCurrentPath,
+    upgradeHistoryPath,
+    upgradeReadmePath,
+    upgradeSessionsDir,
     brainDir,
     brainCurrentPath,
     brainHistoryPath,
@@ -626,6 +640,7 @@ function handleValidate(workspace) {
   const issues = [];
   const { repoRoot, manifest, profile, profilePath, profileDocPath, statusCurrentPath, statusEventsPath, changeCurrentPath, changeHistoryPath, changeReadmePath, changeSchemaPath, changeTemplatePath, changeMemoryPath, trainingCurrentPath, trainingHistoryPath, trainingReadmePath, trainingSchemaPath, evalCurrentPath, evalHistoryPath, evalReadmePath, evalSchemaPath } = workspace;
   const { trainingContinuousPath, trainingContinuousHistoryPath, trainingContinuousReadmePath } = workspace;
+  const { upgradeCurrentPath, upgradeHistoryPath, upgradeReadmePath } = workspace;
   const { brainCurrentPath, brainHistoryPath, brainReadmePath, brainSchemaPath } = workspace;
   const luauReadmePath = path.join(repoRoot, 'docs', 'luau', 'README.md');
   const luauCurrentPath = path.join(repoRoot, 'docs', 'luau', 'current.json');
@@ -710,6 +725,15 @@ function handleValidate(workspace) {
   }
   if (!fs.existsSync(trainingContinuousReadmePath)) {
     issues.push(`missing training continuity readme: ${path.relative(repoRoot, trainingContinuousReadmePath)}`);
+  }
+  if (!fs.existsSync(upgradeCurrentPath)) {
+    issues.push(`missing upgrade snapshot: ${path.relative(repoRoot, upgradeCurrentPath)}`);
+  }
+  if (!fs.existsSync(upgradeHistoryPath)) {
+    issues.push(`missing upgrade history: ${path.relative(repoRoot, upgradeHistoryPath)}`);
+  }
+  if (!fs.existsSync(upgradeReadmePath)) {
+    issues.push(`missing upgrade readme: ${path.relative(repoRoot, upgradeReadmePath)}`);
   }
   if (!fs.existsSync(brainReadmePath)) {
     issues.push(`missing brain readme: ${path.relative(repoRoot, brainReadmePath)}`);
@@ -2196,17 +2220,24 @@ function captureBrainFromUpgrade(workspace, report) {
   appendBrainEvent(workspace, {
     source: 'upgrade',
     scope: `profile:${workspace.activeProfileName}`,
-    status: 'active',
-    confidence: 78,
-    title: `${workspace.activeProfileName} upgrade sync`,
-    summary: `Upgrade sync touched ${report.agents.length} agent sections across ${report.hosts.length} host views.`,
+    status: report.blocked > 0 ? 'candidate' : 'active',
+    confidence: Math.min(95, 76 + (report.learned || 0) * 4 + (report.reinforced || 0) * 2),
+    title: `${workspace.activeProfileName} upgrade ${report.mode || 'sync'}`,
+    summary: `Upgrade ${report.mode || 'sync'} learned ${report.learned || 0} new agent lessons and reinforced ${report.reinforced || 0}.`,
     facts: [
-      `agents: ${report.agents.map((agent) => agent.title).join(', ') || 'none'}`,
+      `agents: ${report.agents.map((agent) => `${agent.title}:${agent.status}`).join(', ') || 'none'}`,
       `hosts: ${report.hosts.join(', ') || 'none'}`,
+      `blocked: ${report.blocked || 0}`,
     ],
-    tags: ['upgrade', workspace.activeProfileName].concat(report.hosts || []),
-    relatedPaths: [workspace.profileDocPath, path.join(workspace.repoRoot, 'AGENTS.md'), workspace.manifestPath],
-    evidence: `Upgrade sync for ${workspace.activeProfileName}`,
+    tags: ['upgrade', report.mode || 'sync', workspace.activeProfileName].concat(report.hosts || []),
+    relatedPaths: [
+      report.summaryPath ? path.join(workspace.repoRoot, report.summaryPath) : workspace.profileDocPath,
+      workspace.profileDocPath,
+      path.join(workspace.repoRoot, 'AGENTS.md'),
+      workspace.upgradeCurrentPath,
+      workspace.upgradeHistoryPath,
+    ],
+    evidence: `Upgrade ${report.mode || 'sync'} for ${workspace.activeProfileName}`,
     host: workspace.activeHostName,
     profile: workspace.activeProfileName,
   });
@@ -2930,33 +2961,294 @@ function handleLuauGate(workspace, flags, positional) {
 }
 
 function handleUpgrade(workspace, flags, positional) {
-  const actionInput = positional[0];
-  const action = normalizeUpgradeAction(actionInput);
-  const targetIndex = action !== 'apply' ? 1 : 0;
-  const targetPath = flags.files?.[0] || positional[targetIndex] || path.join(workspace.repoRoot, 'AGENTS.md');
+  const { action, targetIndex } = parseUpgradeInvocation(positional);
+  const targetPath = resolveUpgradeTargetPath(workspace, flags, positional, targetIndex);
   const absoluteTargetPath = path.isAbsolute(targetPath) ? targetPath : path.resolve(workspace.repoRoot, targetPath);
   if (!fs.existsSync(absoluteTargetPath)) {
     console.error(`Upgrade target not found: ${targetPath}`);
     process.exit(1);
   }
 
+  const activeHost = normalizeHostName(flags.host || workspace.activeHostName);
   const sourceText = fs.readFileSync(absoluteTargetPath, 'utf8');
-  const report = buildUpgradeReport(workspace, sourceText, absoluteTargetPath, normalizeHostName(flags.host || workspace.activeHostName));
-  if (action === 'preview' || action === 'status') {
-    printUpgradePreview(report, action);
-    return;
-  }
 
-  const scope = resolveUpgradeSyncScope(action);
-  syncUpgradeArtifacts(workspace, report, scope);
-
-  console.log('[UPGRADE]');
-  if (action !== 'apply') {
-    console.log(`Mode: ${action}`);
+  switch (action) {
+    case 'preview':
+      handleUpgradePreview(workspace, sourceText, absoluteTargetPath, activeHost);
+      return;
+    case 'learn':
+      handleUpgradeLearn(workspace, sourceText, absoluteTargetPath, activeHost);
+      return;
+    case 'apply':
+      handleUpgradeApply(workspace, sourceText, absoluteTargetPath, activeHost, resolveUpgradeSyncScope('cycle'));
+      return;
+    case 'sync':
+      handleUpgradeSync(workspace, absoluteTargetPath, activeHost, resolveUpgradeSyncScope('cycle'));
+      return;
+    case 'report':
+      handleUpgradeReport(workspace, absoluteTargetPath, activeHost);
+      return;
+    case 'replay':
+      handleUpgradeReplay(workspace, sourceText, absoluteTargetPath, activeHost, flags, positional);
+      return;
+    case 'docs':
+    case 'profile':
+    case 'memory':
+    case 'hosts':
+      handleUpgradeApply(workspace, sourceText, absoluteTargetPath, activeHost, resolveUpgradeSyncScope(action));
+      return;
+    case 'status':
+      handleUpgradeReport(workspace, absoluteTargetPath, activeHost);
+      return;
+    case 'cycle':
+    default:
+      handleUpgradeCycle(workspace, sourceText, absoluteTargetPath, activeHost);
+      return;
   }
-  console.log(`Target: ${path.relative(workspace.repoRoot, absoluteTargetPath)}`);
+}
+
+function resolveUpgradeTargetPath(workspace, flags, positional, targetIndex) {
+  return flags.files?.[0] || positional[targetIndex] || path.join(workspace.repoRoot, 'AGENTS.md');
+}
+
+function handleUpgradePreview(workspace, sourceText, targetPath, activeHost) {
+  const report = buildUpgradeLearningReport(workspace, sourceText, targetPath, activeHost, 'preview');
+  console.log('[UPGRADE PREVIEW]');
+  console.log(`Target: ${path.relative(workspace.repoRoot, targetPath)}`);
+  console.log(`Profile: ${report.activeProfile}`);
+  console.log(`Host focus: ${report.activeHost}`);
   console.log(`Agents upgraded: ${report.agents.length}`);
-  console.log(`Hosts synced: ${report.hosts.join(', ')}`);
+  console.log(`Learned: ${report.learned}`);
+  console.log(`Reinforced: ${report.reinforced}`);
+  console.log(`Blocked: ${report.blocked}`);
+  for (const agent of report.agents.slice(0, 5)) {
+    console.log(`- ${agent.title} | ${agent.status} | ${agent.lesson}`);
+  }
+}
+
+function handleUpgradeLearn(workspace, sourceText, targetPath, activeHost) {
+  const report = buildUpgradeLearningReport(workspace, sourceText, targetPath, activeHost, 'learn');
+  const current = persistUpgradeSnapshot(workspace, report, 'learn');
+  console.log('[UPGRADE LEARN]');
+  printUpgradeReportSummary(workspace, current);
+}
+
+function handleUpgradeApply(workspace, sourceText, targetPath, activeHost, scope) {
+  const report = buildUpgradeLearningReport(workspace, sourceText, targetPath, activeHost, 'apply');
+  const current = persistUpgradeSnapshot(workspace, report, 'apply');
+  syncUpgradeArtifacts(workspace, current, scope);
+  console.log('[UPGRADE]');
+  console.log(`Mode: ${inferUpgradeScopeName(scope)}`);
+  printUpgradeReportSummary(workspace, current);
+}
+
+function handleUpgradeSync(workspace, targetPath, activeHost, scope) {
+  const current = readUpgradeCurrent(workspace);
+  if (!current || !Array.isArray(current.agents) || current.agents.length === 0) {
+    console.error('No upgrade state found. Run `agent-system upgrade learn` first.');
+    process.exit(1);
+  }
+  const report = {
+    ...current,
+    mode: 'sync',
+    outcome: 'synced',
+    activeHost: normalizeHostName(activeHost || current.activeHost || workspace.activeHostName),
+    targetPath: current.targetPath || targetPath,
+    scope: scope || current.scope || resolveUpgradeSyncScope('cycle'),
+    generatedAt: new Date().toISOString(),
+  };
+  const persisted = persistUpgradeSnapshot(workspace, report, 'sync');
+  syncUpgradeArtifacts(workspace, persisted, scope || persisted.scope);
+  console.log('[UPGRADE]');
+  console.log('Mode: sync');
+  printUpgradeReportSummary(workspace, persisted);
+}
+
+function handleUpgradeReport(workspace, targetPath, activeHost) {
+  const current = readUpgradeCurrent(workspace);
+  const report = current && Array.isArray(current.agents) && current.agents.length > 0
+    ? current
+    : buildUpgradeLearningReport(workspace, fs.existsSync(targetPath) ? fs.readFileSync(targetPath, 'utf8') : '', targetPath, activeHost, 'report');
+  console.log('[UPGRADE REPORT]');
+  printUpgradeReportSummary(workspace, report);
+}
+
+function handleUpgradeReplay(workspace, sourceText, targetPath, activeHost, flags, positional) {
+  const history = readUpgradeHistory(workspace);
+  const sourceRef = flags.source || '';
+  const replaySource = sourceRef
+    ? history.find((entry) => entry.sessionId === sourceRef || entry.summaryPath === sourceRef || entry.targetPath === sourceRef)
+    : history[history.length - 1] || null;
+  if (!replaySource) {
+    console.error('No upgrade session found to replay.');
+    process.exit(1);
+  }
+  const current = buildUpgradeLearningReport(workspace, sourceText, targetPath, activeHost, 'replay', replaySource.sessionId || sourceRef);
+  const comparison = compareUpgradeReplay(current, replaySource);
+  console.log('[UPGRADE REPLAY]');
+  console.log(`Target: ${path.relative(workspace.repoRoot, targetPath)}`);
+  console.log(`Replay source: ${replaySource.sessionId || sourceRef}`);
+  console.log(`Stable: ${comparison.stable ? 'yes' : 'no'}`);
+  console.log(`Drifted agents: ${comparison.driftedAgents}`);
+  for (const agent of comparison.agents.slice(0, 5)) {
+    console.log(`- ${agent.title} | ${agent.currentStatus} -> ${agent.previousStatus}`);
+  }
+}
+
+function handleUpgradeCycle(workspace, sourceText, targetPath, activeHost) {
+  const learned = buildUpgradeLearningReport(workspace, sourceText, targetPath, activeHost, 'cycle');
+  const current = persistUpgradeSnapshot(workspace, learned, 'learn');
+  syncUpgradeArtifacts(workspace, current, resolveUpgradeSyncScope('cycle'));
+  const applied = persistUpgradeSnapshot(workspace, { ...current, mode: 'apply', outcome: 'applied' }, 'apply');
+  syncUpgradeArtifacts(workspace, applied, resolveUpgradeSyncScope('cycle'));
+  const synced = persistUpgradeSnapshot(workspace, { ...applied, mode: 'sync', outcome: 'synced' }, 'sync');
+  syncUpgradeArtifacts(workspace, synced, resolveUpgradeSyncScope('cycle'));
+  console.log('[UPGRADE]');
+  console.log('Mode: cycle');
+  printUpgradeReportSummary(workspace, synced);
+}
+
+function printUpgradeReportSummary(workspace, report) {
+  const targetPath = report.targetPath
+    ? (path.isAbsolute(report.targetPath) ? report.targetPath : path.resolve(workspace.repoRoot, report.targetPath))
+    : path.join(workspace.repoRoot, 'AGENTS.md');
+  console.log(`Target: ${path.relative(workspace.repoRoot, targetPath)}`);
+  console.log(`Host: ${report.activeHost}`);
+  console.log(`Mode: ${report.mode}`);
+  console.log(`Scope: ${inferUpgradeScopeName(report.scope)}`);
+  console.log(`Session: ${report.sessionId || 'n/a'}`);
+  console.log(`Agents upgraded: ${report.agents.length}`);
+  console.log(`Learned: ${report.learned || 0}`);
+  console.log(`Reinforced: ${report.reinforced || 0}`);
+  console.log(`Blocked: ${report.blocked || 0}`);
+  if (report.replaySource) {
+    console.log(`Replay source: ${report.replaySource}`);
+  }
+  for (const agent of report.agents.slice(0, 8)) {
+    console.log(`- ${agent.title} | ${agent.status} | ${agent.lesson}`);
+  }
+}
+
+function inferUpgradeScopeName(scope) {
+  if (!scope) return 'apply';
+  if (scope.docs && scope.profileDoc && scope.profileMemory && scope.hostMemory) return 'apply';
+  if (scope.docs && !scope.profileMemory && !scope.hostMemory) return 'docs';
+  if (!scope.docs && scope.profileDoc && scope.profileMemory && !scope.hostMemory) return 'profile';
+  if (!scope.docs && !scope.profileDoc && scope.profileMemory && scope.hostMemory) return 'memory';
+  if (!scope.docs && !scope.profileDoc && !scope.profileMemory && scope.hostMemory) return 'hosts';
+  return 'custom';
+}
+
+function compareUpgradeReplay(current, previous) {
+  const currentByKey = new Map((current.agents || []).map((agent) => [agent.lessonKey, agent]));
+  const previousByKey = new Map((previous.agents || []).map((agent) => [agent.lessonKey, agent]));
+  const agents = [];
+  let driftedAgents = 0;
+
+  for (const [key, currentAgent] of currentByKey) {
+    const previousAgent = previousByKey.get(key);
+    const sameLesson = Boolean(previousAgent) && normalize(currentAgent.lesson) === normalize(previousAgent.lesson);
+    if (!sameLesson) {
+      driftedAgents += 1;
+    }
+    agents.push({
+      title: currentAgent.title,
+      currentStatus: currentAgent.status,
+      previousStatus: previousAgent?.status || 'missing',
+    });
+  }
+
+  return {
+    stable: driftedAgents === 0,
+    driftedAgents,
+    agents,
+  };
+}
+
+function persistUpgradeSnapshot(workspace, report, phase) {
+  const summaryAbsolutePath = report.summaryPath
+    ? (path.isAbsolute(report.summaryPath) ? report.summaryPath : path.resolve(workspace.repoRoot, report.summaryPath))
+    : path.join(workspace.upgradeSessionsDir, `${report.sessionId || 'upgrade'}.md`);
+  const current = {
+    kind: report.kind || 'agent-system-upgrade',
+    version: report.version || 1,
+    mode: phase,
+    outcome: report.outcome || (phase === 'apply' ? 'applied' : phase === 'sync' ? 'synced' : phase === 'preview' ? 'previewed' : 'learned'),
+    activeProfile: report.activeProfile || workspace.activeProfileName,
+    activeHost: normalizeHostName(report.activeHost || workspace.activeHostName),
+    generatedAt: report.generatedAt || new Date().toISOString(),
+    sessionId: report.sessionId || `${new Date().toISOString().replace(/[:.]/g, '-')}-${normalizeHostName(report.activeHost || workspace.activeHostName)}-${phase}`,
+    targetPath: report.targetPath || '',
+    replaySource: report.replaySource || '',
+    scope: report.scope || resolveUpgradeSyncScope('cycle'),
+    sections: report.sections || [],
+    agents: report.agents || [],
+    hosts: report.hosts || Array.from(new Set(workspace.profile?.supportedHosts || ['claude', 'codex', 'qwen'])),
+    learned: report.learned || 0,
+    reinforced: report.reinforced || 0,
+    blocked: report.blocked || 0,
+    summaryPath: path.relative(workspace.repoRoot, summaryAbsolutePath),
+    currentDocPath: path.relative(workspace.repoRoot, workspace.upgradeCurrentPath),
+    historyPath: path.relative(workspace.repoRoot, workspace.upgradeHistoryPath),
+  };
+
+  fs.mkdirSync(path.dirname(workspace.upgradeCurrentPath), { recursive: true });
+  fs.writeFileSync(workspace.upgradeCurrentPath, JSON.stringify(current, null, 2) + '\n', 'utf8');
+
+  const history = readUpgradeHistory(workspace);
+  const historyEntry = {
+    ...current,
+    eventType: phase,
+    recordedAt: current.generatedAt,
+    sequence: history.length + 1,
+  };
+  fs.mkdirSync(path.dirname(workspace.upgradeHistoryPath), { recursive: true });
+  fs.appendFileSync(workspace.upgradeHistoryPath, JSON.stringify(historyEntry) + '\n', 'utf8');
+
+  fs.mkdirSync(workspace.upgradeSessionsDir, { recursive: true });
+  fs.writeFileSync(summaryAbsolutePath, renderUpgradeSessionDoc(current), 'utf8');
+  captureBrainFromUpgrade(workspace, current);
+  return current;
+}
+
+function renderUpgradeSessionDoc(report) {
+  const lines = [];
+  lines.push('# Upgrade Session');
+  lines.push('');
+  lines.push(`- Session: ${report.sessionId}`);
+  lines.push(`- Mode: ${report.mode}`);
+  lines.push(`- Outcome: ${report.outcome}`);
+  lines.push(`- Profile: ${report.activeProfile}`);
+  lines.push(`- Host: ${report.activeHost}`);
+  lines.push(`- Target: ${report.targetPath || 'n/a'}`);
+  lines.push(`- Learned: ${report.learned || 0}`);
+  lines.push(`- Reinforced: ${report.reinforced || 0}`);
+  lines.push(`- Blocked: ${report.blocked || 0}`);
+  if (report.replaySource) {
+    lines.push(`- Replay source: ${report.replaySource}`);
+  }
+  lines.push('');
+  lines.push('## Agents');
+  lines.push('');
+  for (const agent of report.agents || []) {
+    lines.push(`### ${agent.title}`);
+    lines.push(`- Status: ${agent.status}`);
+    lines.push(`- Confidence: ${agent.confidence}`);
+    lines.push(`- Lesson: ${agent.lesson}`);
+    if (agent.previousSession) {
+      lines.push(`- Previous session: ${agent.previousSession}`);
+    }
+    if (agent.evidence) {
+      lines.push(`- Evidence: ${agent.evidence}`);
+    }
+    if (Array.isArray(agent.notes) && agent.notes.length > 0) {
+      for (const note of agent.notes) {
+        lines.push(`- ${note}`);
+      }
+    }
+    lines.push('');
+  }
+  return lines.join('\n').trimEnd() + '\n';
 }
 
 function handleTrain(workspace, flags, positional) {
@@ -3014,29 +3306,6 @@ function handleTrain(workspace, flags, positional) {
   }
   if (report.luauLesson) {
     console.log(`Luau lesson: ${report.luauLesson}`);
-  }
-}
-
-function normalizeUpgradeAction(value) {
-  const action = String(value || 'apply').trim().toLowerCase();
-  if (action === 'preview' || action === 'status' || action === 'docs' || action === 'profile' || action === 'memory' || action === 'hosts' || action === 'apply') {
-    return action;
-  }
-  return 'apply';
-}
-
-function resolveUpgradeSyncScope(action) {
-  switch (action) {
-    case 'docs':
-      return { docs: true, profileDoc: true, profileMemory: false, hostMemory: false };
-    case 'profile':
-      return { docs: false, profileDoc: true, profileMemory: true, hostMemory: false };
-    case 'memory':
-      return { docs: false, profileDoc: false, profileMemory: true, hostMemory: true };
-    case 'hosts':
-      return { docs: false, profileDoc: false, profileMemory: false, hostMemory: true };
-    default:
-      return { docs: true, profileDoc: true, profileMemory: true, hostMemory: true };
   }
 }
 
@@ -4461,19 +4730,185 @@ function replaceMarkedBlock(sourceText, startMarker, endMarker, block) {
   return `${current}\n\n${nextBlock}\n`;
 }
 
-function buildUpgradeReport(workspace, sourceText, targetPath, activeHost) {
+function normalizeUpgradeAction(value) {
+  const action = String(value || '').trim().toLowerCase();
+  if (['preview', 'learn', 'apply', 'sync', 'report', 'replay', 'docs', 'profile', 'memory', 'hosts', 'status'].includes(action)) {
+    return action;
+  }
+  return 'cycle';
+}
+
+function parseUpgradeInvocation(positional) {
+  const action = normalizeUpgradeAction(positional[0]);
+  if (action === 'cycle' && positional.length > 0) {
+    return { action: 'cycle', targetIndex: 0 };
+  }
+  return { action, targetIndex: 1 };
+}
+
+function resolveUpgradeSyncScope(action) {
+  switch (action) {
+    case 'docs':
+      return { docs: true, profileDoc: true, profileMemory: false, hostMemory: false };
+    case 'profile':
+      return { docs: false, profileDoc: true, profileMemory: true, hostMemory: false };
+    case 'memory':
+      return { docs: false, profileDoc: false, profileMemory: true, hostMemory: true };
+    case 'hosts':
+      return { docs: false, profileDoc: false, profileMemory: false, hostMemory: true };
+    default:
+      return { docs: true, profileDoc: true, profileMemory: true, hostMemory: true };
+  }
+}
+
+function readUpgradeCurrent(workspace) {
+  if (!fs.existsSync(workspace.upgradeCurrentPath)) {
+    return {
+      kind: 'agent-system-upgrade',
+      version: 1,
+      mode: 'idle',
+      outcome: 'idle',
+      activeProfile: workspace.activeProfileName,
+      activeHost: workspace.activeHostName,
+      generatedAt: '',
+      sessionId: '',
+      targetPath: '',
+      replaySource: '',
+      scope: resolveUpgradeSyncScope('cycle'),
+      sections: [],
+      agents: [],
+      hosts: Array.from(new Set(workspace.profile?.supportedHosts || ['claude', 'codex', 'qwen'])),
+      learned: 0,
+      reinforced: 0,
+      blocked: 0,
+      summaryPath: '',
+      currentDocPath: path.relative(workspace.repoRoot, workspace.upgradeCurrentPath),
+      historyPath: path.relative(workspace.repoRoot, workspace.upgradeHistoryPath),
+    };
+  }
+  try {
+    return readJson(workspace.upgradeCurrentPath);
+  } catch {
+    return {
+      kind: 'agent-system-upgrade',
+      version: 1,
+      mode: 'idle',
+      outcome: 'idle',
+      activeProfile: workspace.activeProfileName,
+      activeHost: workspace.activeHostName,
+      generatedAt: '',
+      sessionId: '',
+      targetPath: '',
+      replaySource: '',
+      scope: resolveUpgradeSyncScope('cycle'),
+      sections: [],
+      agents: [],
+      hosts: Array.from(new Set(workspace.profile?.supportedHosts || ['claude', 'codex', 'qwen'])),
+      learned: 0,
+      reinforced: 0,
+      blocked: 0,
+      summaryPath: '',
+      currentDocPath: path.relative(workspace.repoRoot, workspace.upgradeCurrentPath),
+      historyPath: path.relative(workspace.repoRoot, workspace.upgradeHistoryPath),
+    };
+  }
+}
+
+function readUpgradeHistory(workspace) {
+  if (!fs.existsSync(workspace.upgradeHistoryPath)) {
+    return [];
+  }
+  const entries = [];
+  const lines = fs.readFileSync(workspace.upgradeHistoryPath, 'utf8').split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      entries.push(JSON.parse(trimmed));
+    } catch {
+      continue;
+    }
+  }
+  return entries;
+}
+
+function buildUpgradeHistoryIndex(history) {
+  const index = new Map();
+  for (const entry of history) {
+    for (const agent of entry.agents || []) {
+      const key = normalize(String(agent.lessonKey || `${agent.title || ''}:${agent.lesson || ''}`));
+      if (!key) continue;
+      index.set(key, {
+        sessionId: entry.sessionId || '',
+        confidence: agent.confidence || 0,
+        status: agent.status || 'new',
+      });
+    }
+  }
+  return index;
+}
+
+function buildUpgradeLearningReport(workspace, sourceText, targetPath, activeHost, mode = 'learn', replaySource = '') {
   const parsedSections = parseUpgradeAgentSections(sourceText);
   const sourceSections = parsedSections.length > 0 ? parsedSections : inferProfileUpgradeAgents(workspace.profile);
-  const agents = sourceSections.map((section) => buildUpgradeAgent(section, workspace, activeHost));
+  const historyIndex = buildUpgradeHistoryIndex(readUpgradeHistory(workspace));
+  const agents = sourceSections.map((section) => buildUpgradeAgentRecord(section, workspace, activeHost, historyIndex));
   const hosts = Array.from(new Set(workspace.profile?.supportedHosts || ['claude', 'codex', 'qwen']));
+  const now = new Date().toISOString();
+  const sessionId = `${now.replace(/[:.]/g, '-')}-${normalizeHostName(activeHost)}-${mode}`;
+  const counts = {
+    learned: agents.filter((agent) => agent.status === 'new').length,
+    reinforced: agents.filter((agent) => agent.status === 'reinforced').length,
+    blocked: agents.filter((agent) => agent.status === 'blocked').length,
+  };
+  const outcome = counts.blocked > 0 ? 'partial' : mode === 'replay' ? 'compared' : mode === 'preview' ? 'previewed' : 'learned';
   return {
+    kind: 'agent-system-upgrade',
+    version: 1,
+    mode,
+    outcome,
+    activeProfile: workspace.activeProfileName,
+    activeHost: normalizeHostName(activeHost),
+    generatedAt: now,
+    sessionId,
     targetPath,
-    profile: workspace.activeProfileName,
-    activeHost,
-    generatedAt: new Date().toISOString(),
+    replaySource,
+    scope: resolveUpgradeSyncScope(mode),
     sections: sourceSections,
     agents,
     hosts,
+    learned: counts.learned,
+    reinforced: counts.reinforced,
+    blocked: counts.blocked,
+    summaryPath: path.join(workspace.upgradeSessionsDir, `${sessionId}.md`),
+    currentDocPath: path.relative(workspace.repoRoot, workspace.upgradeCurrentPath),
+    historyPath: path.relative(workspace.repoRoot, workspace.upgradeHistoryPath),
+  };
+}
+
+function buildUpgradeAgentRecord(section, workspace, syncHost, historyIndex) {
+  const title = normalizeUpgradeHeading(section.heading);
+  const notes = upgradeNotesForTitle(title, section.body.join('\n'), workspace, syncHost);
+  const evidence = String(section.body.join('\n') || '').trim();
+  const lesson = notes[0] || `Keep ${title} explicit and stable.`;
+  const lessonKey = normalize([title, lesson, evidence].join(' | '));
+  const previous = historyIndex.get(lessonKey);
+  const status = previous ? 'reinforced' : notes.length > 0 ? 'new' : 'blocked';
+  const confidence = previous
+    ? Math.min(95, (previous.confidence || 70) + 5)
+    : Math.max(60, 68 + Math.min(20, notes.length * 4));
+  return {
+    heading: section.heading,
+    title,
+    key: normalize(title),
+    lesson,
+    notes,
+    evidence,
+    lessonKey,
+    status,
+    confidence,
+    previousSession: previous?.sessionId || '',
+    hostTargets: Array.from(new Set(workspace.profile?.supportedHosts || ['claude', 'codex', 'qwen'])),
   };
 }
 
@@ -4504,15 +4939,6 @@ function inferProfileUpgradeAgents(profile) {
     }
   }
   return entries;
-}
-
-function buildUpgradeAgent(section, workspace, syncHost) {
-  const title = normalizeUpgradeHeading(section.heading);
-  return {
-    heading: section.heading,
-    title,
-    notes: upgradeNotesForTitle(title, section.body.join('\n'), workspace, syncHost),
-  };
 }
 
 function normalizeUpgradeHeading(heading) {
@@ -4586,19 +5012,36 @@ function renderUpgradeSyncDoc(sourceText, report) {
   lines.push('## Upgrade Sync');
   lines.push('');
   lines.push(`Generated: ${report.generatedAt}`);
-  lines.push(`Profile: ${report.profile}`);
+  lines.push(`Profile: ${report.activeProfile}`);
   lines.push(`Host focus: ${report.activeHost}`);
+  lines.push(`Mode: ${report.mode}`);
+  lines.push(`Outcome: ${report.outcome}`);
   lines.push(`Agents upgraded: ${report.agents.length}`);
+  lines.push(`Learned: ${report.learned || 0}`);
+  lines.push(`Reinforced: ${report.reinforced || 0}`);
+  lines.push(`Blocked: ${report.blocked || 0}`);
+  if (report.targetPath) {
+    lines.push(`Target: ${report.targetPath}`);
+  }
+  if (report.replaySource) {
+    lines.push(`Replay source: ${report.replaySource}`);
+  }
   lines.push('');
-  for (const agent of report.agents) {
+  for (const agent of report.agents || []) {
     lines.push(`### ${agent.title}`);
-    for (const note of agent.notes) {
+    lines.push(`- Status: ${agent.status}`);
+    lines.push(`- Confidence: ${agent.confidence}`);
+    lines.push(`- Lesson: ${agent.lesson}`);
+    if (agent.evidence) {
+      lines.push(`- Evidence: ${agent.evidence}`);
+    }
+    for (const note of agent.notes || []) {
       lines.push(`- ${note}`);
     }
     lines.push('');
   }
   lines.push('### Host Sync');
-  for (const host of report.hosts) {
+  for (const host of report.hosts || []) {
     lines.push(`- ${host}: memory and instructions synced from the same upgrade pass.`);
   }
   lines.push(end);
@@ -4646,7 +5089,6 @@ function syncUpgradeArtifacts(workspace, report, scope = {}) {
       fs.writeFileSync(hostPath, mergeUpgradeMemory(existing, renderUpgradeMemoryBlock('host', host, report, host)), 'utf8');
     }
   }
-  captureBrainFromUpgrade(workspace, report);
 }
 
 function renderUpgradeMemoryBlock(scope, name, report, syncHost = report.activeHost) {
@@ -4657,15 +5099,32 @@ function renderUpgradeMemoryBlock(scope, name, report, syncHost = report.activeH
   lines.push(`Scope: ${scope}`);
   lines.push(`Name: ${name}`);
   lines.push(`Generated: ${report.generatedAt}`);
+  lines.push(`Mode: ${report.mode}`);
+  lines.push(`Outcome: ${report.outcome}`);
   lines.push(`Agents upgraded: ${report.agents.length}`);
+  lines.push(`Learned: ${report.learned || 0}`);
+  lines.push(`Reinforced: ${report.reinforced || 0}`);
+  lines.push(`Blocked: ${report.blocked || 0}`);
   lines.push('');
-  for (const section of report.sections || []) {
-    const title = normalizeUpgradeHeading(section.heading);
-    const notes = upgradeNotesForTitle(title, section.body.join('\n'), { activeHostName: syncHost }, syncHost);
-    lines.push(`## ${title}`);
-    for (const note of notes) {
+  for (const agent of report.agents || []) {
+    lines.push(`## ${agent.title}`);
+    lines.push(`- Status: ${agent.status}`);
+    lines.push(`- Confidence: ${agent.confidence}`);
+    lines.push(`- Lesson: ${agent.lesson}`);
+    if (agent.evidence) {
+      lines.push(`- Evidence: ${agent.evidence}`);
+    }
+    for (const note of agent.notes || []) {
       lines.push(`- ${note}`);
     }
+    lines.push('');
+  }
+  if ((report.hosts || []).length > 0) {
+    lines.push('### Host Sync');
+    for (const host of report.hosts) {
+      lines.push(`- ${host}: memory and instructions synced from the same upgrade pass.`);
+    }
+    lines.push(`- Host sync target: ${syncHost}.`);
     lines.push('');
   }
   lines.push('<!-- agent-system-upgrade-end -->');
@@ -4970,6 +5429,9 @@ function buildLintReport(workspace) {
     ['training continuity snapshot exists', () => fs.existsSync(workspace.trainingContinuousPath)],
     ['training continuity history exists', () => fs.existsSync(workspace.trainingContinuousHistoryPath)],
     ['training continuity readme exists', () => fs.existsSync(workspace.trainingContinuousReadmePath)],
+    ['upgrade snapshot exists', () => fs.existsSync(workspace.upgradeCurrentPath)],
+    ['upgrade history exists', () => fs.existsSync(workspace.upgradeHistoryPath)],
+    ['upgrade readme exists', () => fs.existsSync(workspace.upgradeReadmePath)],
     ['training recovery readme exists', () => fs.existsSync(path.join(workspace.repoRoot, workspace.manifest.training?.recovery || 'docs/training/recovery', 'README.md'))],
     ['brain readme exists', () => fs.existsSync(workspace.brainReadmePath)],
     ['brain schema exists', () => fs.existsSync(workspace.brainSchemaPath)],

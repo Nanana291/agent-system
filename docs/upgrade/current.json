@@ -1,0 +1,31 @@
+{
+  "kind": "agent-system-upgrade",
+  "version": 1,
+  "mode": "idle",
+  "outcome": "idle",
+  "activeProfile": "imphub",
+  "activeHost": "qwen",
+  "generatedAt": "",
+  "sessionId": "",
+  "targetPath": "",
+  "replaySource": "",
+  "scope": {
+    "docs": true,
+    "profileDoc": true,
+    "profileMemory": true,
+    "hostMemory": true
+  },
+  "sections": [],
+  "agents": [],
+  "hosts": [
+    "claude",
+    "codex",
+    "qwen"
+  ],
+  "learned": 0,
+  "reinforced": 0,
+  "blocked": 0,
+  "summaryPath": "",
+  "currentDocPath": "docs/upgrade/current.json",
+  "historyPath": "docs/upgrade/history.jsonl"
+}

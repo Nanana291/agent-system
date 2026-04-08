@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, cpSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, cpSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -116,6 +116,112 @@ test('upgrade preview inspects the target without writing any sync blocks', () =
     assert.match(result.stdout, /\[UPGRADE PREVIEW\]/);
     assert.match(result.stdout, /Agents upgraded: 2/);
     assert.equal(readFileSync(path.join(workspace, 'AGENTS.md'), 'utf8').includes('agent-system-upgrade-start'), false);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('upgrade learn persists per-agent lessons and a session report', () => {
+  const workspace = createWorkspace();
+  try {
+    writeFileSync(
+      path.join(workspace, 'AGENTS.md'),
+      `# Agent System
+
+## Agent 1 — The Scriptmaster
+- Owns logic and recovery.
+
+## Agent 2 — The UI Designer
+- Owns UI and visible wording.
+`,
+      'utf8',
+    );
+
+    const result = runAgent(['upgrade', 'learn', '--host', 'qwen'], workspace);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /\[UPGRADE LEARN\]/);
+    assert.match(result.stdout, /Mode: learn/);
+
+    const current = JSON.parse(readFileSync(path.join(workspace, 'docs', 'upgrade', 'current.json'), 'utf8'));
+    const history = readFileSync(path.join(workspace, 'docs', 'upgrade', 'history.jsonl'), 'utf8');
+    const sessionPath = path.join(workspace, current.summaryPath);
+
+    assert.equal(current.mode, 'learn');
+    assert.equal(current.agents.length, 2);
+    assert.equal(existsSync(sessionPath), true);
+    assert.match(readFileSync(sessionPath, 'utf8'), /# Upgrade Session/);
+    assert.equal((history.trim().split(/\r?\n/).filter(Boolean).length >= 1), true);
+    assert.equal(readFileSync(path.join(workspace, 'AGENTS.md'), 'utf8').includes('agent-system-upgrade-start'), false);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('upgrade report prints the learned upgrade state without writing files', () => {
+  const workspace = createWorkspace();
+  try {
+    writeFileSync(
+      path.join(workspace, 'AGENTS.md'),
+      `# Agent System
+
+## Agent 1 — The Scriptmaster
+- Owns logic and recovery.
+`,
+      'utf8',
+    );
+
+    const learn = runAgent(['upgrade', 'learn', '--host', 'qwen'], workspace);
+    assert.equal(learn.status, 0, learn.stderr);
+
+    const report = runAgent(['upgrade', 'report', '--host', 'qwen'], workspace);
+    assert.equal(report.status, 0, report.stderr);
+    assert.match(report.stdout, /\[UPGRADE REPORT\]/);
+    assert.match(report.stdout, /Mode: learn/);
+    assert.match(report.stdout, /Learned:/);
+    assert.match(report.stdout, /Agents upgraded: 1/);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('upgrade replay detects drift against a historical upgrade session', () => {
+  const workspace = createWorkspace();
+  try {
+    writeFileSync(
+      path.join(workspace, 'AGENTS.md'),
+      `# Agent System
+
+## Agent 1 — The Scriptmaster
+- Owns logic and recovery.
+
+## Agent 2 — The UI Designer
+- Owns UI and visible wording.
+`,
+      'utf8',
+    );
+
+    const learn = runAgent(['upgrade', 'learn', '--host', 'qwen'], workspace);
+    assert.equal(learn.status, 0, learn.stderr);
+    const current = JSON.parse(readFileSync(path.join(workspace, 'docs', 'upgrade', 'current.json'), 'utf8'));
+
+    writeFileSync(
+      path.join(workspace, 'AGENTS.md'),
+      `# Agent System
+
+## Agent 1 — The Scriptmaster
+- Owns logic, recovery, and training.
+
+## Agent 2 — The UI Designer
+- Owns UI and visible wording.
+`,
+      'utf8',
+    );
+
+    const replay = runAgent(['upgrade', 'replay', '--host', 'qwen', '--source', current.sessionId], workspace);
+    assert.equal(replay.status, 0, replay.stderr);
+    assert.match(replay.stdout, /\[UPGRADE REPLAY\]/);
+    assert.match(replay.stdout, /Stable: no/);
+    assert.match(replay.stdout, /Drifted agents: 1/);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }
