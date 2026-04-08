@@ -1,0 +1,20 @@
+{
+  "kind": "agent-system-eval",
+  "version": 1,
+  "mode": "idle",
+  "outcome": "idle",
+  "activeProfile": "imphub",
+  "activeHost": "qwen",
+  "sessionId": "",
+  "generatedAt": "",
+  "threshold": 75,
+  "score": 0,
+  "verdict": "retry",
+  "delta": 0,
+  "comparedTo": "baseline",
+  "promoted": false,
+  "findings": [],
+  "lessons": [],
+  "summaryPath": ""
+}
+

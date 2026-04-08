@@ -1,6 +1,6 @@
 {
   "name": "agent-system",
-  "version": "0.5.2.5",
+  "version": "0.5.3",
   "schemaVersion": 1,
   "purpose": "Universal route, ownership, handoff, and delivery-gate scaffold that complements Superpowers.",
   "superpowersIntegration": {
@@ -27,7 +27,8 @@
     "memory": "memory",
     "status": "status",
     "change": "change",
-    "training": "docs/training"
+    "training": "docs/training",
+    "evals": "docs/evals"
   },
   "profileDiscovery": {
     "defaultProfile": "imphub",
@@ -81,6 +82,12 @@
     "history": "docs/training/history.jsonl",
     "readme": "docs/training/README.md",
     "schema": "docs/training-schema.md"
+  },
+  "eval": {
+    "current": "docs/evals/current.json",
+    "history": "docs/evals/history.jsonl",
+    "readme": "docs/evals/README.md",
+    "schema": "docs/evals-schema.md"
   },
   "backup": {
     "schema": "docs/backup-schema.md",

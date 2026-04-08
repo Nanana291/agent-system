@@ -67,9 +67,9 @@ Short form:
 qwen extensions install Nanana291/agent-system
 ```
 
-## V0.5.2.5 scope
+## V0.5.3 scope
 
-This release adds the multi-agent training loop. The repository can now train several agents at once, write the resulting instruction sync blocks into the active profile and host memories, record the lesson in docs, and keep the update path aligned for repeated runs without duplicating blocks.
+This release adds the evaluation loop. The repository can now simulate a run, score it, compare it against the last evaluation, and promote the durable lessons into the active profile and host memories when the score clears the threshold.
 
 ## Memory layer
 
@@ -110,6 +110,9 @@ node ./bin/agent-system.mjs memory packs list --host qwen
 node ./bin/agent-system.mjs train
 node ./bin/agent-system.mjs train error --host qwen
 node ./bin/agent-system.mjs train replay --host qwen
+node ./bin/agent-system.mjs eval
+node ./bin/agent-system.mjs eval compare --host qwen
+node ./bin/agent-system.mjs eval promote --host qwen
 node ./bin/agent-system.mjs status show
 node ./bin/agent-system.mjs status who
 node ./bin/agent-system.mjs status set --agent ghost --name Ghost --action "Waiting for ghost to finish auto farm" --state working --scope farm-loop --eta 08:00
