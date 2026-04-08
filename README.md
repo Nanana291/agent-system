@@ -67,11 +67,13 @@ Short form:
 qwen extensions install Nanana291/agent-system
 ```
 
-## V0.5.8 scope
+## V0.5.9 scope
 
-This release makes training control host-separated and more useful for day-to-day work. `train explain` and `train compare` now write their audit trails per host, `memory gate` can demote weak host lessons back into `memory/change/<host>.md`, and host training packs appear automatically once a host accumulates enough continuous cycles.
+This release adds learning recovery. `memory snapshot`, `memory restore`, `memory diff`, and `memory rollback` now preserve host learning state as a recoverable snapshot, and `train rollback` can restore the latest snapshot for the active host. Training packs are versioned, so the host learning surface can be audited and rolled back without guessing what changed.
 
-`train` still acts as the continuous improvement engine. Successful cycles auto-promote durable lessons, refresh the host learning pack, and write a continuous-training snapshot in `docs/training/` so the last improvement pass is auditable without opening the full session log.
+`train explain` and `train compare` still write host-separated audit trails, `memory gate` can demote weak host lessons back into `memory/change/<host>.md`, and host training packs still appear automatically once a host accumulates enough continuous cycles.
+
+`train` still acts as the continuous improvement engine. Successful cycles auto-promote durable lessons, refresh the host learning pack, and write a continuous-training snapshot in `docs/training/` so the last improvement pass is auditable without opening the full session log. Successful training and memory recovery passes now also capture a host recovery snapshot so rollback has a stable target.
 
 The Luau repair loop from `0.5.6` remains in place: `luau-explain` explains the repair route and proof, `luau-diagnose` reports Luau-specific issues, `luau-repair` can repair multi-file Luau changes across code, config, docs, memory, and `AGENTS.md`, and `luau-gate` blocks incomplete repairs until the repair snapshot is ready.
 
@@ -111,6 +113,10 @@ node ./bin/agent-system.mjs memory compress --host qwen
 node ./bin/agent-system.mjs memory teach --host qwen
 node ./bin/agent-system.mjs memory gate --host qwen
 node ./bin/agent-system.mjs memory demote --host qwen
+node ./bin/agent-system.mjs memory snapshot --host qwen ./qwen-learning-snapshot.json
+node ./bin/agent-system.mjs memory restore --file ./qwen-learning-snapshot.json
+node ./bin/agent-system.mjs memory diff --file ./qwen-learning-snapshot.json
+node ./bin/agent-system.mjs memory rollback --host qwen
 node ./bin/agent-system.mjs memory reflect --host qwen
 node ./bin/agent-system.mjs memory packs generate --host qwen
 node ./bin/agent-system.mjs memory packs list --host qwen
@@ -118,6 +124,7 @@ node ./bin/agent-system.mjs train
 node ./bin/agent-system.mjs luau-train
 node ./bin/agent-system.mjs train error --host qwen
 node ./bin/agent-system.mjs train replay --host qwen
+node ./bin/agent-system.mjs train rollback --host qwen
 node ./bin/agent-system.mjs train explain --host qwen
 node ./bin/agent-system.mjs train compare --host qwen
 node ./bin/agent-system.mjs train packs --host qwen

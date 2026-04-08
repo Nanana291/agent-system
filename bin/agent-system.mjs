@@ -317,6 +317,7 @@ function printHelp() {
     '  luau-gate  Validate a Luau repair snapshot',
     '  train      Train multiple agents and sync training memory and docs',
     '  luau-train Train Luau-aware lessons and sync Luau memory focus',
+    '    rollback Restore the latest active host training snapshot',
     '  eval       Simulate, score, compare, and promote evaluation runs',
     '  luau-eval  Simulate and score Luau-aware evaluation runs',
     '  memory    Read or update layered memory files',
@@ -334,6 +335,10 @@ function printHelp() {
     '    packs    Generate or list host learning packs',
     '    suggest  Propose memory promotions from change lessons',
     '    learn    Auto-promote repeated lessons into higher memory scopes',
+    '    snapshot Capture the active host learning state for rollback',
+    '    restore  Restore the active host learning state from a snapshot',
+    '    diff     Compare the active host learning state against a snapshot',
+    '    rollback Restore the latest active host learning snapshot',
     '  backup    Snapshot the current mutable workspace state',
     '  restore   Restore a previously captured backup snapshot',
     '  bundle    Validate, diff, or prune backup bundles',
@@ -825,6 +830,26 @@ function handleMemory(workspace, flags, positional) {
     return;
   }
 
+  if (action === 'snapshot') {
+    handleMemorySnapshot(workspace, flags, positional.slice(1));
+    return;
+  }
+
+  if (action === 'restore') {
+    handleMemoryRestore(workspace, flags, positional.slice(1));
+    return;
+  }
+
+  if (action === 'diff') {
+    handleMemoryDiff(workspace, flags, positional.slice(1));
+    return;
+  }
+
+  if (action === 'rollback') {
+    handleMemoryRollback(workspace, flags, positional.slice(1));
+    return;
+  }
+
   if (action === 'demote') {
     handleMemoryDemote(workspace, flags);
     return;
@@ -918,6 +943,7 @@ function handleMemoryCompress(workspace, flags) {
 function handleMemoryTeach(workspace, flags) {
   const hostName = normalizeHostName(flags.host || workspace.activeHostName);
   const report = teachHostMemory(workspace.repoRoot, hostName);
+  saveLearningSnapshot(workspace.repoRoot, hostName, 'memory-teach');
   console.log('[MEMORY TEACH]');
   console.log(`Host: ${hostName}`);
   console.log(`Wrote: ${path.relative(workspace.repoRoot, report.targetPath)}`);
@@ -927,6 +953,9 @@ function handleMemoryGate(workspace, flags) {
   const hostName = normalizeHostName(flags.host || workspace.activeHostName);
   const report = gateHostMemory(workspace.repoRoot, hostName);
   const demoted = !report.ready ? demoteHostMemory(workspace.repoRoot, hostName) : { demoted: [], targetPath: resolveHostMemoryPath(workspace.repoRoot, hostName, 'change') };
+  if (!report.ready) {
+    saveLearningSnapshot(workspace.repoRoot, hostName, 'memory-gate');
+  }
   console.log('[MEMORY GATE]');
   console.log(`Host: ${hostName}`);
   console.log(`Ready: ${report.ready ? 'yes' : 'no'}`);
@@ -948,6 +977,7 @@ function handleMemoryReflect(workspace, flags) {
 function handleMemoryDemote(workspace, flags) {
   const hostName = normalizeHostName(flags.host || workspace.activeHostName);
   const report = demoteHostMemory(workspace.repoRoot, hostName);
+  saveLearningSnapshot(workspace.repoRoot, hostName, 'memory-demote');
   console.log('[MEMORY DEMOTE]');
   console.log(`Host: ${hostName}`);
   console.log(`Demoted: ${report.demoted.length}`);
@@ -990,6 +1020,9 @@ function handleMemoryLearn(workspace, flags) {
       console.log(`- ${promotion.target}: ${promotion.text}`);
     }
   }
+  if (report.applied && report.promoted > 0) {
+    saveLearningSnapshot(workspace.repoRoot, hostName, 'memory-learn');
+  }
 }
 
 function handleMemoryCapture(workspace, positional) {
@@ -1002,6 +1035,92 @@ function handleMemoryCapture(workspace, positional) {
   const report = evaluateChangeGate(intake);
   captureChangeMemory(workspace, intake, report, workspace.activeHostName);
   console.log(`Captured change memory for ${intake.target || 'unknown target'}`);
+}
+
+function handleMemorySnapshot(workspace, flags, positional) {
+  const hostName = normalizeHostName(flags.host || workspace.activeHostName);
+  const outputPath = flags.files?.[0] || positional[0] || '';
+  const report = saveLearningSnapshot(workspace.repoRoot, hostName, 'manual');
+  if (outputPath) {
+    const absoluteOutputPath = path.isAbsolute(outputPath) ? outputPath : path.resolve(workspace.repoRoot, outputPath);
+    fs.mkdirSync(path.dirname(absoluteOutputPath), { recursive: true });
+    fs.writeFileSync(absoluteOutputPath, JSON.stringify(report.snapshot, null, 2) + '\n', 'utf8');
+  }
+  console.log(renderLearningSnapshotSnapshot({
+    activeHost: hostName,
+    activeProfile: report.snapshot.activeProfile,
+    fileCount: Object.keys(report.snapshot.files).length,
+    latestPath: report.latestPath,
+    archivePath: report.archivePath,
+    packVersion: report.snapshot.packVersion,
+  }));
+  if (outputPath) {
+    const absoluteOutputPath = path.isAbsolute(outputPath) ? outputPath : path.resolve(workspace.repoRoot, outputPath);
+    console.log(`Export: ${path.relative(workspace.repoRoot, absoluteOutputPath)}`);
+  }
+}
+
+function handleMemoryRestore(workspace, flags, positional) {
+  const hostName = normalizeHostName(flags.host || workspace.activeHostName);
+  const inputPath = flags.files?.[0] || positional[0];
+  const snapshotSource = inputPath
+    ? (path.isAbsolute(inputPath) ? inputPath : path.resolve(workspace.repoRoot, inputPath))
+    : readLatestLearningSnapshot(workspace.repoRoot, hostName).snapshotPath;
+  if (!snapshotSource) {
+    console.error(`No learning snapshot found for host ${hostName}`);
+    process.exit(1);
+  }
+  const snapshot = readLearningSnapshotBundle(snapshotSource);
+  if (!snapshot) {
+    console.error(`Unable to read learning snapshot: ${snapshotSource}`);
+    process.exit(1);
+  }
+  const restored = restoreLearningSnapshot(workspace.repoRoot, snapshot);
+  console.log(renderLearningSnapshotRestore({
+    ...restored,
+    snapshotPath: snapshotSource,
+  }));
+}
+
+function handleMemoryDiff(workspace, flags, positional) {
+  const hostName = normalizeHostName(flags.host || workspace.activeHostName);
+  const inputPath = flags.files?.[0] || positional[0];
+  const snapshotSource = inputPath
+    ? (path.isAbsolute(inputPath) ? inputPath : path.resolve(workspace.repoRoot, inputPath))
+    : readLatestLearningSnapshot(workspace.repoRoot, hostName).snapshotPath;
+  if (!snapshotSource) {
+    console.error(`No learning snapshot found for host ${hostName}`);
+    process.exit(1);
+  }
+  const snapshot = readLearningSnapshotBundle(snapshotSource);
+  if (!snapshot) {
+    console.error(`Unable to read learning snapshot: ${snapshotSource}`);
+    process.exit(1);
+  }
+  const report = diffLearningSnapshot(workspace.repoRoot, snapshot);
+  console.log(renderLearningSnapshotDiff(report));
+}
+
+function handleMemoryRollback(workspace, flags, positional) {
+  const hostName = normalizeHostName(flags.host || workspace.activeHostName);
+  const inputPath = flags.files?.[0] || positional[0];
+  const snapshotSource = inputPath
+    ? (path.isAbsolute(inputPath) ? inputPath : path.resolve(workspace.repoRoot, inputPath))
+    : readLatestLearningSnapshot(workspace.repoRoot, hostName).snapshotPath;
+  if (!snapshotSource) {
+    console.error(`No learning snapshot found for host ${hostName}`);
+    process.exit(1);
+  }
+  const snapshot = readLearningSnapshotBundle(snapshotSource);
+  if (!snapshot) {
+    console.error(`Unable to read learning snapshot: ${snapshotSource}`);
+    process.exit(1);
+  }
+  const restored = restoreLearningSnapshot(workspace.repoRoot, snapshot);
+  console.log(renderLearningSnapshotRestore({
+    ...restored,
+    snapshotPath: snapshotSource,
+  }));
 }
 
 function reviewHostMemory(repoRoot, hostName) {
@@ -1208,6 +1327,194 @@ function listLearningPack(repoRoot, hostName) {
   const normalizedHost = normalizeHostName(hostName);
   const packPath = resolveHostMemoryPath(repoRoot, normalizedHost, 'packs');
   return { targetPath: packPath };
+}
+
+function resolveLearningRecoveryPaths(repoRoot, hostName) {
+  const normalizedHost = normalizeHostName(hostName);
+  const baseDir = path.join(repoRoot, 'docs', 'training', 'recovery', normalizedHost);
+  return {
+    baseDir,
+    latestPath: path.join(baseDir, 'latest.json'),
+    historyPath: path.join(baseDir, 'history.jsonl'),
+    snapshotsDir: path.join(baseDir, 'snapshots'),
+  };
+}
+
+function collectLearningSnapshotFiles(repoRoot, hostName, profileName) {
+  const normalizedHost = normalizeHostName(hostName);
+  const activeProfile = profileName || readCurrentProfileName(repoRoot);
+  const files = {};
+  const paths = [
+    'AGENTS.md',
+    path.join('profiles', activeProfile, 'AGENTS.md'),
+    path.join('memory', 'profile', `${activeProfile}.md`),
+    path.join('memory', 'host', `${normalizedHost}.md`),
+    path.join('memory', 'change', `${normalizedHost}.md`),
+    path.join('memory', 'packs', `${normalizedHost}.md`),
+    path.join('docs', 'training', 'current.json'),
+    path.join('docs', 'training', 'continuous.json'),
+    path.join('docs', 'training', 'continuous.md'),
+    path.join('docs', 'training', 'packs', `${normalizedHost}.md`),
+    path.join('docs', 'training', 'packs', `${normalizedHost}.json`),
+    path.join('docs', 'training', 'explain', `${normalizedHost}.jsonl`),
+    path.join('docs', 'training', 'explain', `${normalizedHost}.md`),
+    path.join('docs', 'training', 'compare', `${normalizedHost}.jsonl`),
+    path.join('docs', 'training', 'compare', `${normalizedHost}.md`),
+  ];
+
+  for (const relative of paths) {
+    const absolute = path.join(repoRoot, relative);
+    files[relative] = fs.existsSync(absolute) ? serializeBackupEntry(absolute) : null;
+  }
+
+  return files;
+}
+
+function buildLearningSnapshot(repoRoot, hostName) {
+  const normalizedHost = normalizeHostName(hostName);
+  const activeProfile = readCurrentProfileName(repoRoot);
+  const files = collectLearningSnapshotFiles(repoRoot, normalizedHost, activeProfile);
+  const createdAt = new Date().toISOString();
+  return {
+    kind: 'agent-system-learning-snapshot',
+    snapshotVersion: 1,
+    packVersion: 1,
+    createdAt,
+    activeProfile,
+    activeHost: normalizedHost,
+    memoryIndex: memoryStats(repoRoot),
+    files,
+  };
+}
+
+function saveLearningSnapshot(repoRoot, hostName, source = 'manual') {
+  const normalizedHost = normalizeHostName(hostName);
+  const snapshot = buildLearningSnapshot(repoRoot, normalizedHost);
+  const paths = resolveLearningRecoveryPaths(repoRoot, normalizedHost);
+  const snapshotId = snapshot.createdAt.replace(/[:.]/g, '-');
+  const archivePath = path.join(paths.snapshotsDir, `${snapshotId}.json`);
+  fs.mkdirSync(paths.snapshotsDir, { recursive: true });
+  fs.mkdirSync(path.dirname(paths.latestPath), { recursive: true });
+  fs.writeFileSync(paths.latestPath, JSON.stringify(snapshot, null, 2) + '\n', 'utf8');
+  fs.writeFileSync(archivePath, JSON.stringify(snapshot, null, 2) + '\n', 'utf8');
+  fs.appendFileSync(paths.historyPath, JSON.stringify({
+    kind: 'agent-system-learning-snapshot-entry',
+    activeProfile: snapshot.activeProfile,
+    activeHost: snapshot.activeHost,
+    createdAt: snapshot.createdAt,
+    snapshotPath: path.relative(repoRoot, archivePath),
+    latestPath: path.relative(repoRoot, paths.latestPath),
+    packVersion: snapshot.packVersion,
+    fileCount: Object.keys(snapshot.files).length,
+    source,
+  }) + '\n', 'utf8');
+  return {
+    snapshot,
+    latestPath: paths.latestPath,
+    archivePath,
+    historyPath: paths.historyPath,
+  };
+}
+
+function readLearningSnapshotBundle(snapshotPath) {
+  if (!snapshotPath || !fs.existsSync(snapshotPath)) {
+    return null;
+  }
+  try {
+    return readJson(snapshotPath);
+  } catch {
+    return null;
+  }
+}
+
+function readLatestLearningSnapshot(repoRoot, hostName) {
+  const paths = resolveLearningRecoveryPaths(repoRoot, hostName);
+  const latest = readLearningSnapshotBundle(paths.latestPath);
+  if (latest) {
+    return { snapshot: latest, snapshotPath: paths.latestPath };
+  }
+  if (!fs.existsSync(paths.historyPath)) {
+    return { snapshot: null, snapshotPath: '' };
+  }
+  const lines = fs.readFileSync(paths.historyPath, 'utf8').split(/\r?\n/).filter(Boolean);
+  const last = lines.reverse().map((line) => {
+    try {
+      return JSON.parse(line);
+    } catch {
+      return null;
+    }
+  }).find(Boolean);
+  if (!last?.snapshotPath) {
+    return { snapshot: null, snapshotPath: '' };
+  }
+  const resolved = path.isAbsolute(last.snapshotPath) ? last.snapshotPath : path.join(repoRoot, last.snapshotPath);
+  return { snapshot: readLearningSnapshotBundle(resolved), snapshotPath: resolved };
+}
+
+function restoreLearningSnapshot(repoRoot, snapshot) {
+  if (!snapshot || typeof snapshot !== 'object' || !snapshot.files || typeof snapshot.files !== 'object') {
+    throw new Error('learning snapshot missing files');
+  }
+  writeBackupEntries(repoRoot, snapshot.files);
+  return {
+    profileName: snapshot.activeProfile || readCurrentProfileName(repoRoot),
+    activeHost: normalizeHostName(snapshot.activeHost || 'qwen'),
+    fileCount: Object.keys(snapshot.files).length,
+  };
+}
+
+function diffLearningSnapshot(repoRoot, snapshot) {
+  if (!snapshot || typeof snapshot !== 'object' || !snapshot.files || typeof snapshot.files !== 'object') {
+    throw new Error('learning snapshot missing files');
+  }
+  const changed = [];
+  for (const [relative, entry] of Object.entries(snapshot.files)) {
+    const currentPath = path.join(repoRoot, relative);
+    const currentText = fs.existsSync(currentPath) ? serializeBackupEntry(currentPath) : null;
+    if (normalizeBackupEntryText(currentText) !== normalizeBackupEntryText(entry)) {
+      changed.push(relative);
+    }
+  }
+  return {
+    snapshotVersion: snapshot.snapshotVersion || 1,
+    activeProfile: snapshot.activeProfile || readCurrentProfileName(repoRoot),
+    activeHost: normalizeHostName(snapshot.activeHost || 'qwen'),
+    changed,
+  };
+}
+
+function renderLearningSnapshotSnapshot(report) {
+  const lines = [];
+  lines.push('[LEARNING SNAPSHOT]');
+  lines.push(`Host: ${report.activeHost}`);
+  lines.push(`Profile: ${report.activeProfile}`);
+  lines.push(`Files: ${report.fileCount}`);
+  lines.push(`Snapshot: ${path.relative(process.cwd(), report.latestPath)}`);
+  lines.push(`Archive: ${path.relative(process.cwd(), report.archivePath)}`);
+  lines.push(`Pack version: ${report.packVersion}`);
+  return lines.join('\n');
+}
+
+function renderLearningSnapshotRestore(report) {
+  const lines = [];
+  lines.push('[LEARNING RESTORE]');
+  lines.push(`Host: ${report.activeHost}`);
+  lines.push(`Profile: ${report.profileName}`);
+  lines.push(`Restored: ${report.fileCount}`);
+  lines.push(`Source: ${path.relative(process.cwd(), report.snapshotPath)}`);
+  return lines.join('\n');
+}
+
+function renderLearningSnapshotDiff(report) {
+  const lines = [];
+  lines.push('[LEARNING DIFF]');
+  lines.push(`Host: ${report.activeHost}`);
+  lines.push(`Profile: ${report.activeProfile}`);
+  lines.push(`Changed: ${report.changed.length}`);
+  for (const item of report.changed) {
+    lines.push(`- ${item}`);
+  }
+  return lines.join('\n');
 }
 
 async function handleChange(workspace, flags, positional) {
@@ -1913,6 +2220,10 @@ function handleTrain(workspace, flags, positional) {
     handleTrainingPacks(workspace, flags);
     return;
   }
+  if (modeInput === 'rollback') {
+    handleTrainRollback(workspace, flags);
+    return;
+  }
   const mode = normalizeTrainMode(modeInput);
   if (modeInput && mode !== modeInput.trim().toLowerCase()) {
     console.error(`Unknown train action: ${modeInput}`);
@@ -1963,6 +2274,7 @@ function handleEval(workspace, flags, positional) {
   }
   if (report.promoted) {
     syncEvaluationPromotions(workspace, report);
+    saveLearningSnapshot(workspace.repoRoot, hostName, 'eval-promote');
   }
 
   console.log('[EVAL]');
@@ -2597,6 +2909,20 @@ function handleTrainingPacks(workspace, flags) {
   console.log(`Pack: ${path.relative(workspace.repoRoot, report.path)}`);
 }
 
+function handleTrainRollback(workspace, flags) {
+  const hostName = normalizeHostName(flags.host || workspace.activeHostName);
+  const latest = readLatestLearningSnapshot(workspace.repoRoot, hostName);
+  if (!latest.snapshot) {
+    console.error(`No learning snapshot found for host ${hostName}`);
+    process.exit(1);
+  }
+  const restored = restoreLearningSnapshot(workspace.repoRoot, latest.snapshot);
+  console.log('[TRAIN ROLLBACK]');
+  console.log(`Host: ${hostName}`);
+  console.log(`Restored: ${path.relative(workspace.repoRoot, latest.snapshotPath)}`);
+  console.log(`Files: ${restored.fileCount}`);
+}
+
 function applyTrainingContinuity(workspace, report, hostName) {
   const autoPromote = report.mode !== 'error';
   const promotionReport = autoPromote
@@ -2626,6 +2952,7 @@ function applyTrainingContinuity(workspace, report, hostName) {
     luauLesson: report.luauLesson,
     hostMemoryPath: path.relative(workspace.repoRoot, resolveHostMemoryPath(workspace.repoRoot, hostName, 'host')),
     packPath: path.relative(workspace.repoRoot, resolveHostMemoryPath(workspace.repoRoot, hostName, 'packs')),
+    trainingPackVersion: 1,
     trainingPackPath: '',
     trainingPackGenerated: false,
   };
@@ -2647,6 +2974,10 @@ function applyTrainingContinuity(workspace, report, hostName) {
     current.trainingPackGenerated = true;
     fs.writeFileSync(workspace.trainingContinuousPath, JSON.stringify(current, null, 2) + '\n', 'utf8');
     fs.writeFileSync(workspace.trainingContinuousReadmePath, renderTrainingContinuousDoc(current), 'utf8');
+  }
+
+  if (autoPromote) {
+    saveLearningSnapshot(workspace.repoRoot, hostName, 'train');
   }
 
   return {
@@ -2673,6 +3004,7 @@ function renderTrainingContinuousDoc(current) {
   lines.push(`- Training log: ${current.summaryPath}`);
   lines.push(`- Host memory: ${current.hostMemoryPath}`);
   lines.push(`- Pack: ${current.packPath}`);
+  lines.push(`- Pack version: ${current.trainingPackVersion || 1}`);
   if (current.luauLesson) {
     lines.push('');
     lines.push('## Luau Focus');
@@ -2727,6 +3059,7 @@ function readTrainingContinuousCurrent(workspace) {
       luauLesson: '',
       hostMemoryPath: '',
       packPath: '',
+      trainingPackVersion: 1,
       trainingPackPath: '',
       trainingPackGenerated: false,
     };
@@ -2753,6 +3086,7 @@ function readTrainingContinuousCurrent(workspace) {
       luauLesson: '',
       hostMemoryPath: '',
       packPath: '',
+      trainingPackVersion: 1,
       trainingPackPath: '',
       trainingPackGenerated: false,
     };
@@ -2894,6 +3228,7 @@ function maybeGenerateTrainingPack(repoRoot, hostName, cycleCountOverride = null
   lines.push(`- Host: ${normalizedHost}`);
   lines.push(`- Cycles: ${cycles}`);
   lines.push(`- Generated: ${new Date().toISOString()}`);
+  lines.push(`- Pack version: 1`);
   lines.push(`- Current lesson: ${current?.luauLesson || current?.promotions?.[0] || 'n/a'}`);
   lines.push('');
   lines.push('## Durable Lessons');
@@ -2912,6 +3247,7 @@ function maybeGenerateTrainingPack(repoRoot, hostName, cycleCountOverride = null
   fs.mkdirSync(path.dirname(packPath), { recursive: true });
   fs.writeFileSync(packPath, lines.join('\n').trimEnd() + '\n', 'utf8');
   fs.writeFileSync(packDataPath, JSON.stringify({
+    packVersion: 1,
     host: normalizedHost,
     cycles,
     generatedAt: new Date().toISOString(),
@@ -3521,6 +3857,7 @@ function buildLintReport(workspace) {
     ['training continuity snapshot exists', () => fs.existsSync(workspace.trainingContinuousPath)],
     ['training continuity history exists', () => fs.existsSync(workspace.trainingContinuousHistoryPath)],
     ['training continuity readme exists', () => fs.existsSync(workspace.trainingContinuousReadmePath)],
+    ['training recovery readme exists', () => fs.existsSync(path.join(workspace.repoRoot, workspace.manifest.training?.recovery || 'docs/training/recovery', 'README.md'))],
     ['eval snapshot exists', () => fs.existsSync(workspace.evalCurrentPath)],
     ['eval history exists', () => fs.existsSync(workspace.evalHistoryPath)],
     ['eval readme exists', () => fs.existsSync(workspace.evalReadmePath)],
@@ -3842,6 +4179,12 @@ function serializeBackupEntry(filePath) {
 function writeBackupEntries(repoRoot, entries) {
   for (const [relative, entry] of Object.entries(entries)) {
     const targetPath = path.join(repoRoot, relative);
+    if (entry === null) {
+      if (fs.existsSync(targetPath)) {
+        fs.rmSync(targetPath, { force: true });
+      }
+      continue;
+    }
     fs.mkdirSync(path.dirname(targetPath), { recursive: true });
     if (entry && typeof entry === 'object' && entry.kind === 'json') {
       fs.writeFileSync(targetPath, JSON.stringify(entry.value, null, 2) + '\n', 'utf8');

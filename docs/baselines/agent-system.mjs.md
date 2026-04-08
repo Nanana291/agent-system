@@ -8,11 +8,12 @@
 
 ## Current Baseline Notes
 
-- `validate` checks the active profile, status files, change files, training logs, training continuity files, per-host training explain/compare histories, evaluation logs, backup schema, quick-update flow, quick-fix flow, luau-quick flow, luau repair flow, upgrade flow, and host memory layout.
-- `lint` enforces manifest consistency, memory drift checks, status presence, change presence, pack presence, training presence, training continuity presence, host training audit presence, evaluation presence, backup schema presence, quick-update coverage, quick-fix coverage, luau-quick coverage, luau-repair coverage, upgrade coverage, and training coverage.
+- `validate` checks the active profile, status files, change files, training logs, training continuity files, host learning recovery snapshots, per-host training explain/compare histories, evaluation logs, backup schema, quick-update flow, quick-fix flow, luau-quick flow, luau repair flow, upgrade flow, and host memory layout.
+- `lint` enforces manifest consistency, memory drift checks, status presence, change presence, pack presence, training presence, training continuity presence, recovery presence, host training audit presence, evaluation presence, backup schema presence, quick-update coverage, quick-fix coverage, luau-quick coverage, luau-repair coverage, upgrade coverage, and training coverage.
 - `status` owns presence, heartbeat, and session attachment.
-- `memory` owns review, compress, teach, gate, reflect, and learning pack generation per host.
+- `memory` owns review, compress, teach, gate, reflect, learning pack generation, and host learning recovery per host.
 - `memory demote` owns weak host lesson removal and change-memory fallback for the active host.
+- `memory snapshot`, `memory restore`, `memory diff`, and `memory rollback` own host learning recovery snapshots.
 - `change` owns intake analysis, scaffold generation, preview/apply, rollback, and gate validation.
 - `backup`, `restore`, and `bundle` own portable snapshot capture, validation, diffing, and pruning.
 - `quick-update` owns fast update intake preparation from target and intent without git-diff dependence.
@@ -26,6 +27,8 @@
 - `eval` auto-detects Luau work and writes Luau-focused lessons into the evaluation log when the active change or repair snapshot is Luau-aware.
 - `luau-train` and `luau-eval` force Luau focus when the user wants explicit Luau learning runs.
 - `train` auto-promotes durable lessons on successful runs, refreshes the host learning pack, and rewrites the continuous-training snapshot.
+- `train rollback` restores the latest host learning snapshot for the active host.
+- `train` and `memory` both write host recovery snapshots when the learning state changes enough to be rollback-worthy.
 - `train explain` and `train compare` emit per-host audit trails under `docs/training/explain/<host>.jsonl` and `docs/training/compare/<host>.jsonl`.
 - `train packs` reports or regenerates the host training pack after enough continuous cycles accumulate.
 - `memory gate` can demote weak host lessons into `memory/change/<host>.md` automatically when host memory is not ready.
@@ -47,4 +50,5 @@
 - `node --test tests/luau-auto-repair-cli.test.mjs`
 - `node --test tests/upgrade-cli.test.mjs`
 - `node --test tests/train-cli.test.mjs`
+- `node --test tests/learning-recovery-cli.test.mjs`
 - `node --test tests/eval-cli.test.mjs`

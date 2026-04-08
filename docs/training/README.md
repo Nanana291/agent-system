@@ -12,6 +12,7 @@ This directory stores the automatic training loop for `agent-system`.
 - `continuous.md` stores the latest auditable continuous-training summary.
 - `explain/<host>.jsonl` and `compare/<host>.jsonl` store host-separated audit trails for `train explain` and `train compare`.
 - `packs/<host>.md` and `packs/<host>.json` store host training packs after enough continuous cycles accumulate.
+- `recovery/<host>/latest.json`, `recovery/<host>/history.jsonl`, and `recovery/<host>/snapshots/<timestamp>.json` store host learning recovery snapshots.
 
 ## Policy
 
@@ -21,5 +22,7 @@ This directory stores the automatic training loop for `agent-system`.
 - `train explain` and `train compare` keep audit history separated by host.
 - `train packs` reports the host training pack once enough continuous cycles have been recorded.
 - `memory gate` can demote weak host lessons back into `memory/change/<host>.md` before promotion.
+- `memory snapshot`, `memory restore`, `memory diff`, and `memory rollback` recover host learning state.
+- `train rollback` restores the latest host learning snapshot after a bad pass.
 - Luau repair snapshots automatically feed `train` with Luau context after `luau-repair` runs.
 - Successful `train` cycles auto-promote durable lessons, refresh the host learning pack, and rewrite the continuous-training snapshot.

@@ -47,6 +47,7 @@ Durable rules should be written where they belong first, then kept inside the ho
 - `backup` captures the full mutable workspace into one portable bundle.
 - `restore` writes a validated backup bundle back into the workspace and then runs post-restore validation.
 - `bundle validate`, `bundle diff`, and `bundle prune` inspect or clean backup bundles without touching live state.
+- `memory snapshot`, `memory restore`, `memory diff`, and `memory rollback` manage host learning recovery snapshots.
 - `change/current.json`, `change/history.jsonl`, and `change/intake.md` support a universal change workflow for updates and new projects.
 - `change analyze`, `change scout`, `change auto-scaffold`, `change scaffold`, `change preview`, `change apply`, `change diff`, `change rollback`, and `change gate` are the change workflow entry points.
 - `change memory-suggest` proposes durable lessons to promote from change memory.
@@ -62,15 +63,17 @@ Durable rules should be written where they belong first, then kept inside the ho
 - `memory gate` can demote weak host lessons back into `memory/change/<host>.md` before promotion.
 - `train` and `eval` auto-detect Luau work or a ready Luau repair snapshot and write Luau-focused lessons into the training and evaluation logs.
 - `luau-train` and `luau-eval` force the Luau learning focus when you want to train or score Luau work directly.
+- `train rollback` restores the latest host learning snapshot for the active host.
 - `upgrade` applies multi-agent instruction upgrades and syncs the resulting memory into the active profile and all supported host memories.
 - `docs/training/current.json`, `docs/training/history.jsonl`, and `docs/training/<session>.md` record the automatic training loop.
 - `docs/training/continuous.json`, `docs/training/continuous-history.jsonl`, and `docs/training/continuous.md` record the continuous-training loop state.
+- `docs/training/recovery/<host>/latest.json`, `docs/training/recovery/<host>/history.jsonl`, and `docs/training/recovery/<host>/snapshots/<timestamp>.json` record host learning recovery snapshots.
 - `train`, `train error`, `train review`, `train replay`, `train promote`, `train sync`, `train explain`, `train compare`, and `train packs` train several agents at once, auto-promote durable lessons on successful runs, refresh the host learning pack, sync the active host memory, and write auditable lesson trails.
 - `docs/evals/current.json`, `docs/evals/history.jsonl`, and `docs/evals/<session>.md` record the evaluation loop.
 - `eval`, `eval simulate`, `eval score`, `eval compare`, and `eval promote` score the current workspace and promote durable lessons when the score clears the threshold.
 - `memory/change/<host>.md` stores auto-captured lessons from change gates before promotion into that same host's memory file.
 - `memory learn` auto-promotes repeated change lessons into the active host's memory file during a successful gate.
 
-## V0.5.8 intent
+## V0.5.9 intent
 
-This release tightens training control by host: `train explain` and `train compare` keep host histories separated, `memory gate` can demote weak host lessons back into change memory, and continuous training now grows host training packs only after enough cycles accumulate. The repo still keeps the portable recovery, training, evaluation, and Luau repair layers intact, and the Luau repair snapshot from `0.5.6` continues to feed training and evaluation automatically so repeated Luau work learns from the previous run.
+This release adds host learning recovery: `memory snapshot`, `memory restore`, `memory diff`, `memory rollback`, and `train rollback` let the repo recover the active host learning surface after a bad pass. Training packs are versioned, host histories stay separated, and the Luau repair snapshot from `0.5.6` continues to feed training and evaluation automatically so repeated Luau work learns from the previous run.
