@@ -1,6 +1,6 @@
 {
   "name": "agent-system",
-  "version": "0.5.6",
+  "version": "0.5.7",
   "schemaVersion": 1,
   "purpose": "Universal route, ownership, handoff, and delivery-gate scaffold that complements Superpowers.",
   "superpowersIntegration": {
@@ -82,7 +82,10 @@
     "current": "docs/training/current.json",
     "history": "docs/training/history.jsonl",
     "readme": "docs/training/README.md",
-    "schema": "docs/training-schema.md"
+    "schema": "docs/training-schema.md",
+    "continuous": "docs/training/continuous.json",
+    "continuousHistory": "docs/training/continuous-history.jsonl",
+    "continuousReadme": "docs/training/continuous.md"
   },
   "eval": {
     "current": "docs/evals/current.json",

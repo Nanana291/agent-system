@@ -1,0 +1,20 @@
+{
+  "kind": "agent-system-training-continuity",
+  "version": 1,
+  "activeProfile": "imphub",
+  "activeHost": "qwen",
+  "mode": "success",
+  "outcome": "applied",
+  "focus": "general",
+  "language": "general",
+  "generatedAt": "",
+  "summaryPath": "docs/training/current.json",
+  "continuityPath": "docs/training/continuous.md",
+  "trainingHistory": "docs/training/history.jsonl",
+  "promotedMemory": 0,
+  "promotions": [],
+  "autoPromote": true,
+  "luauLesson": "",
+  "hostMemoryPath": "memory/host/qwen.md",
+  "packPath": "memory/packs/qwen.md"
+}

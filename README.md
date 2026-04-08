@@ -67,11 +67,13 @@ Short form:
 qwen extensions install Nanana291/agent-system
 ```
 
-## V0.5.6 scope
+## V0.5.7 scope
 
-This release adds a Luau auto-repair loop on top of the existing learning path. `luau-explain` explains the repair route and proof, `luau-diagnose` reports Luau-specific issues, `luau-repair` can repair multi-file Luau changes across code, config, docs, memory, and `AGENTS.md`, and `luau-gate` blocks incomplete repairs until the repair snapshot is ready.
+This release turns `train` into a continuous improvement engine. Every successful cycle now auto-promotes durable lessons, refreshes the host learning pack, and writes a continuous-training snapshot in `docs/training/` so the last improvement pass is auditable without opening the full session log.
 
-The Luau learning loop now also reuses the repair snapshot automatically. `train` and `eval` auto-detect a completed Luau repair, write Luau-focused lessons into the training and evaluation logs, and sync those lessons into host memory so the next Luau run starts with repair-aware context.
+The Luau repair loop from `0.5.6` remains in place: `luau-explain` explains the repair route and proof, `luau-diagnose` reports Luau-specific issues, `luau-repair` can repair multi-file Luau changes across code, config, docs, memory, and `AGENTS.md`, and `luau-gate` blocks incomplete repairs until the repair snapshot is ready.
+
+The Luau learning loop still reuses the repair snapshot automatically. `train` and `eval` auto-detect a completed Luau repair, write Luau-focused lessons into the training and evaluation logs, and sync those lessons into host memory so the next Luau run starts with repair-aware context.
 
 The earlier evaluation loop remains in place: the repository can still simulate a run, score it, compare it against the last evaluation, and promote the durable lessons into the active profile and host memories when the score clears the threshold. The Luau-specific aliases `luau-train` and `luau-eval` still expose the same loop directly when you want to force the focus.
 

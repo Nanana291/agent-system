@@ -62,12 +62,13 @@ Durable rules should be written where they belong first, then kept inside the ho
 - `luau-train` and `luau-eval` force the Luau learning focus when you want to train or score Luau work directly.
 - `upgrade` applies multi-agent instruction upgrades and syncs the resulting memory into the active profile and all supported host memories.
 - `docs/training/current.json`, `docs/training/history.jsonl`, and `docs/training/<session>.md` record the automatic training loop.
-- `train`, `train error`, `train review`, `train replay`, `train promote`, and `train sync` train several agents at once, sync the active host memory, and write an auditable lesson trail.
+- `docs/training/continuous.json`, `docs/training/continuous-history.jsonl`, and `docs/training/continuous.md` record the continuous-training loop state.
+- `train`, `train error`, `train review`, `train replay`, `train promote`, and `train sync` train several agents at once, auto-promote durable lessons on successful runs, refresh the host learning pack, sync the active host memory, and write an auditable lesson trail.
 - `docs/evals/current.json`, `docs/evals/history.jsonl`, and `docs/evals/<session>.md` record the evaluation loop.
 - `eval`, `eval simulate`, `eval score`, `eval compare`, and `eval promote` score the current workspace and promote durable lessons when the score clears the threshold.
 - `memory/change/<host>.md` stores auto-captured lessons from change gates before promotion into that same host's memory file.
 - `memory learn` auto-promotes repeated change lessons into the active host's memory file during a successful gate.
 
-## V0.5.6 intent
+## V0.5.7 intent
 
-This release keeps the portable recovery, training, and evaluation layers intact, and adds a Luau auto-repair loop on top of the Luau quick path: the repo can still snapshot the mutable workspace, validate the bundle, prune duplicate noise, restore the state back into a clean checkout, prepare a fast update intake from just target plus intent, suggest a quick lock when one code/config file is touched, write a Luau lock, gate, and memory note directly when the single changed file is a Luau script, and now auto-explain, auto-diagnose, and auto-repair multi-file Luau work while feeding the resulting repair snapshot back into training, evaluation, and host memory so repeated Luau work learns from the previous run.
+This release turns `train` into a continuous improvement engine: successful cycles auto-promote durable lessons, refresh the host pack, and write a continuous-training snapshot so the last improvement pass is auditable without opening the full session log. The repo still keeps the portable recovery, training, evaluation, and Luau repair layers intact, and the Luau repair snapshot from `0.5.6` continues to feed training and evaluation automatically so repeated Luau work learns from the previous run.

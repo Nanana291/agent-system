@@ -404,6 +404,9 @@ function loadWorkspace(profileName, hostName) {
   const trainingHistoryPath = path.join(repoRoot, manifest.training?.history || 'docs/training/history.jsonl');
   const trainingReadmePath = path.join(repoRoot, manifest.training?.readme || 'docs/training/README.md');
   const trainingSchemaPath = path.join(repoRoot, manifest.training?.schema || 'docs/training-schema.md');
+  const trainingContinuousPath = path.join(repoRoot, manifest.training?.continuous || 'docs/training/continuous.json');
+  const trainingContinuousHistoryPath = path.join(repoRoot, manifest.training?.continuousHistory || 'docs/training/continuous-history.jsonl');
+  const trainingContinuousReadmePath = path.join(repoRoot, manifest.training?.continuousReadme || 'docs/training/continuous.md');
   const evalDir = path.join(repoRoot, manifest.paths?.evals || 'docs/evals');
   const evalCurrentPath = path.join(repoRoot, manifest.eval?.current || 'docs/evals/current.json');
   const evalHistoryPath = path.join(repoRoot, manifest.eval?.history || 'docs/evals/history.jsonl');
@@ -436,6 +439,9 @@ function loadWorkspace(profileName, hostName) {
     trainingHistoryPath,
     trainingReadmePath,
     trainingSchemaPath,
+    trainingContinuousPath,
+    trainingContinuousHistoryPath,
+    trainingContinuousReadmePath,
     evalDir,
     evalCurrentPath,
     evalHistoryPath,
@@ -491,6 +497,7 @@ function resolveTemplatePath(repoRoot, template, profileName, fallback = '') {
 function handleValidate(workspace) {
   const issues = [];
   const { repoRoot, manifest, profile, profilePath, profileDocPath, statusCurrentPath, statusEventsPath, changeCurrentPath, changeHistoryPath, changeReadmePath, changeSchemaPath, changeTemplatePath, changeMemoryPath, trainingCurrentPath, trainingHistoryPath, trainingReadmePath, trainingSchemaPath, evalCurrentPath, evalHistoryPath, evalReadmePath, evalSchemaPath } = workspace;
+  const { trainingContinuousPath, trainingContinuousHistoryPath, trainingContinuousReadmePath } = workspace;
   const luauReadmePath = path.join(repoRoot, 'docs', 'luau', 'README.md');
   const luauCurrentPath = path.join(repoRoot, 'docs', 'luau', 'current.json');
   const luauHistoryPath = path.join(repoRoot, 'docs', 'luau', 'history.jsonl');
@@ -565,6 +572,15 @@ function handleValidate(workspace) {
   }
   if (!fs.existsSync(trainingSchemaPath)) {
     issues.push(`missing training schema: ${path.relative(repoRoot, trainingSchemaPath)}`);
+  }
+  if (!fs.existsSync(trainingContinuousPath)) {
+    issues.push(`missing training continuity snapshot: ${path.relative(repoRoot, trainingContinuousPath)}`);
+  }
+  if (!fs.existsSync(trainingContinuousHistoryPath)) {
+    issues.push(`missing training continuity history: ${path.relative(repoRoot, trainingContinuousHistoryPath)}`);
+  }
+  if (!fs.existsSync(trainingContinuousReadmePath)) {
+    issues.push(`missing training continuity readme: ${path.relative(repoRoot, trainingContinuousReadmePath)}`);
   }
   if (!fs.existsSync(evalCurrentPath)) {
     issues.push(`missing eval snapshot: ${path.relative(repoRoot, evalCurrentPath)}`);
@@ -1817,6 +1833,7 @@ function handleTrain(workspace, flags, positional) {
   syncTrainingArtifacts(workspace, report);
   writeTrainingRecord(workspace, report);
   captureTrainingMemory(workspace, report);
+  const continuity = applyTrainingContinuity(workspace, report, hostName);
 
   console.log('[TRAIN]');
   console.log(`Mode: ${report.mode}`);
@@ -1824,6 +1841,9 @@ function handleTrain(workspace, flags, positional) {
   console.log(`Focus: ${report.focus || 'general'}`);
   console.log(`Agents trained: ${report.agents.length}`);
   console.log(`Training log: ${path.relative(workspace.repoRoot, report.summaryPath)}`);
+  console.log(`Auto promotion: ${continuity.autoPromote ? 'yes' : 'no'}`);
+  console.log(`Promoted lessons: ${continuity.promotions}`);
+  console.log(`Continuous summary: ${path.relative(workspace.repoRoot, continuity.summaryPath)}`);
   for (const agent of report.agents) {
     console.log(`- ${agent.title}`);
   }
@@ -2443,6 +2463,103 @@ function captureTrainingMemory(workspace, report) {
   }
 }
 
+function applyTrainingContinuity(workspace, report, hostName) {
+  const autoPromote = report.mode !== 'error';
+  const promotionReport = autoPromote
+    ? learnMemory(workspace.repoRoot, hostName, 2, true)
+    : { promoted: 0, duplicates: [], promotions: [] };
+  if (autoPromote) {
+    teachHostMemory(workspace.repoRoot, hostName);
+    generateLearningPack(workspace.repoRoot, hostName);
+  }
+
+  const current = {
+    kind: 'agent-system-training-continuity',
+    version: 1,
+    activeProfile: report.activeProfile,
+    activeHost: hostName,
+    mode: report.mode,
+    outcome: report.outcome,
+    focus: report.focus,
+    language: report.language,
+    generatedAt: report.generatedAt,
+    summaryPath: path.relative(workspace.repoRoot, report.summaryPath),
+    continuityPath: path.relative(workspace.repoRoot, workspace.trainingContinuousReadmePath),
+    trainingHistory: path.relative(workspace.repoRoot, workspace.trainingHistoryPath),
+    promotedMemory: promotionReport.promoted,
+    promotions: promotionReport.promotions.map((promotion) => promotion.text),
+    autoPromote,
+    luauLesson: report.luauLesson,
+    hostMemoryPath: path.relative(workspace.repoRoot, resolveHostMemoryPath(workspace.repoRoot, hostName, 'host')),
+    packPath: path.relative(workspace.repoRoot, resolveHostMemoryPath(workspace.repoRoot, hostName, 'packs')),
+  };
+
+  fs.mkdirSync(path.dirname(workspace.trainingContinuousPath), { recursive: true });
+  fs.writeFileSync(workspace.trainingContinuousPath, JSON.stringify(current, null, 2) + '\n', 'utf8');
+  fs.writeFileSync(workspace.trainingContinuousReadmePath, renderTrainingContinuousDoc(current), 'utf8');
+
+  const historyEntry = {
+    ...current,
+    recordedAt: report.generatedAt,
+    sequence: readTrainingContinuousHistory(workspace).length + 1,
+  };
+  fs.appendFileSync(workspace.trainingContinuousHistoryPath, JSON.stringify(historyEntry) + '\n', 'utf8');
+
+  return {
+    autoPromote,
+    promotions: promotionReport.promoted,
+    summaryPath: workspace.trainingContinuousReadmePath,
+  };
+}
+
+function renderTrainingContinuousDoc(current) {
+  const lines = [];
+  lines.push('# Continuous Training');
+  lines.push('');
+  lines.push(`- Generated: ${current.generatedAt}`);
+  lines.push(`- Profile: ${current.activeProfile}`);
+  lines.push(`- Host: ${current.activeHost}`);
+  lines.push(`- Mode: ${current.mode}`);
+  lines.push(`- Outcome: ${current.outcome}`);
+  lines.push(`- Focus: ${current.focus || 'general'}`);
+  lines.push(`- Auto promotion: ${current.autoPromote ? 'yes' : 'no'}`);
+  lines.push(`- Promoted lessons: ${current.promotedMemory}`);
+  lines.push(`- Training log: ${current.summaryPath}`);
+  lines.push(`- Host memory: ${current.hostMemoryPath}`);
+  lines.push(`- Pack: ${current.packPath}`);
+  if (current.luauLesson) {
+    lines.push('');
+    lines.push('## Luau Focus');
+    lines.push(`- ${current.luauLesson}`);
+  }
+  if (Array.isArray(current.promotions) && current.promotions.length > 0) {
+    lines.push('');
+    lines.push('## Promotions');
+    for (const promotion of current.promotions) {
+      lines.push(`- ${promotion}`);
+    }
+  }
+  return lines.join('\n').trimEnd() + '\n';
+}
+
+function readTrainingContinuousHistory(workspace) {
+  if (!fs.existsSync(workspace.trainingContinuousHistoryPath)) {
+    return [];
+  }
+  const entries = [];
+  const lines = fs.readFileSync(workspace.trainingContinuousHistoryPath, 'utf8').split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      entries.push(JSON.parse(trimmed));
+    } catch {
+      continue;
+    }
+  }
+  return entries;
+}
+
 function writeTrainingRecord(workspace, report) {
   const current = {
     kind: report.kind,
@@ -3040,6 +3157,9 @@ function buildLintReport(workspace) {
     ['training history exists', () => fs.existsSync(workspace.trainingHistoryPath)],
     ['training readme exists', () => fs.existsSync(workspace.trainingReadmePath)],
     ['training schema exists', () => fs.existsSync(workspace.trainingSchemaPath)],
+    ['training continuity snapshot exists', () => fs.existsSync(workspace.trainingContinuousPath)],
+    ['training continuity history exists', () => fs.existsSync(workspace.trainingContinuousHistoryPath)],
+    ['training continuity readme exists', () => fs.existsSync(workspace.trainingContinuousReadmePath)],
     ['eval snapshot exists', () => fs.existsSync(workspace.evalCurrentPath)],
     ['eval history exists', () => fs.existsSync(workspace.evalHistoryPath)],
     ['eval readme exists', () => fs.existsSync(workspace.evalReadmePath)],

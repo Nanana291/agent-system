@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, cpSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, cpSync, readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -102,6 +102,32 @@ test('train replay reuses the latest lesson without duplicating sync blocks', ()
     assert.equal((agentsDoc.match(/agent-system-training-start/g) || []).length, 1);
     assert.equal((profileDoc.match(/agent-system-training-start/g) || []).length, 1);
     assert.equal(history.trim().split(/\r?\n/).filter(Boolean).length, 2);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('train auto-promotes repeated lessons and writes a continuous summary', () => {
+  const workspace = createWorkspace();
+  try {
+    cpSync(path.join(repoRoot, 'memory'), path.join(workspace, 'memory'), { recursive: true });
+    const changeMemory = path.join(workspace, 'memory', 'change', 'qwen.md');
+    writeFileSync(changeMemory, '# Qwen Change Memory\n\n- Keep route fallback deterministic.\n- Keep route fallback deterministic.\n', 'utf8');
+
+    const result = runAgent(['train', '--host', 'qwen'], workspace);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Auto promotion:/);
+    assert.match(result.stdout, /Continuous summary:/);
+
+    const hostMemory = readFileSync(path.join(workspace, 'memory', 'host', 'qwen.md'), 'utf8');
+    const continuousCurrent = JSON.parse(readFileSync(path.join(workspace, 'docs', 'training', 'continuous.json'), 'utf8'));
+    const continuousDoc = readFileSync(path.join(workspace, 'docs', 'training', 'continuous.md'), 'utf8');
+
+    assert.match(hostMemory, /Keep route fallback deterministic/);
+    assert.equal(continuousCurrent.promotedMemory > 0, true);
+    assert.match(continuousDoc, /Continuous Training/);
+    assert.match(continuousDoc, /Auto promotion/);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }
