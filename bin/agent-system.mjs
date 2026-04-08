@@ -44,6 +44,9 @@ async function main() {
     case 'quick-fix':
       handleQuickFix(workspace, flags, positional);
       return;
+    case 'luau-quick':
+      handleLuauQuick(workspace, flags, positional);
+      return;
     case 'train':
       handleTrain(workspace, flags, positional);
       return;
@@ -289,6 +292,7 @@ function printHelp() {
     '  quick-update Prepare a fast update intake from target + intent',
     '  upgrade    Apply multi-agent instruction and memory upgrades',
     '  quick-fix  Handle a single-file code/config fix with a fast path',
+    '  luau-quick Handle a single-file Luau fix with a Luau-specific fast path',
     '  train      Train multiple agents and sync training memory and docs',
     '  eval       Simulate, score, compare, and promote evaluation runs',
     '  memory    Read or update layered memory files',
@@ -1213,30 +1217,51 @@ function detectQuickFixCandidate(repoRoot) {
   };
 }
 
-function buildQuickFixReport(workspace, candidate, hostName) {
+function detectLuauQuickCandidate(repoRoot) {
+  const candidate = detectQuickFixCandidate(repoRoot);
+  if (!candidate || !isLuauQuickFile(candidate.target)) {
+    return null;
+  }
+  return {
+    ...candidate,
+    agent: 'Scriptmaster',
+    checks: ['target changed', 'single file', 'Luau only', 'code/config only'],
+    reason: `single Luau file touched: ${candidate.target}`,
+    risk: 'Low - single Luau file, no cross-file state',
+    change: `Tune Luau behavior in ${candidate.target}`,
+    scope: 'logic',
+    memoryLine: `Luau lesson: ${candidate.change}; target: ${candidate.target}; scope: ${candidate.scope}.`,
+    language: 'Luau',
+    luauQuick: true,
+  };
+}
+
+function buildQuickFixReport(workspace, candidate, hostName, options = {}) {
   const now = new Date().toISOString();
   const memoryPath = resolveHostMemoryPath(workspace.repoRoot, hostName, 'change');
-  const memoryLine = `Quick fix lesson: ${candidate.change}; target: ${candidate.target}; scope: ${candidate.scope}.`;
+  const memoryLine = options.memoryLine || `Quick fix lesson: ${candidate.change}; target: ${candidate.target}; scope: ${candidate.scope}.`;
   return {
-    kind: 'agent-system-quick-fix',
+    kind: options.kind || 'agent-system-quick-fix',
     version: 1,
     activeProfile: workspace.activeProfileName,
     activeHost: hostName,
     generatedAt: now,
     target: candidate.target,
-    agent: candidate.agent,
-    skill: candidate.skill,
-    checks: candidate.checks,
-    reason: candidate.reason,
-    risk: candidate.risk,
-    change: candidate.change,
-    scope: candidate.scope,
+    agent: options.agent || candidate.agent,
+    skill: options.skill || candidate.skill,
+    checks: options.checks || candidate.checks,
+    reason: options.reason || candidate.reason,
+    risk: options.risk || candidate.risk,
+    change: options.change || candidate.change,
+    scope: options.scope || candidate.scope,
+    language: options.language || candidate.language || (isLuauQuickFile(candidate.target) ? 'Luau' : 'code/config'),
     targetChanged: true,
     noSideEffects: true,
     codeConfigOnly: true,
     ready: true,
     memoryPath,
     memoryLine,
+    luauQuick: Boolean(options.luauQuick || candidate.luauQuick),
   };
 }
 
@@ -1267,6 +1292,8 @@ function writeQuickFixRecord(workspace, report) {
     profile: workspace.activeProfileName,
     host: report.activeHost,
     quickFix: true,
+    luauQuick: Boolean(report.luauQuick),
+    language: report.language || null,
     agent: report.agent,
     skill: report.skill,
   };
@@ -1277,6 +1304,11 @@ function writeQuickFixRecord(workspace, report) {
 function captureQuickFixMemory(workspace, report) {
   ensureMemoryChangeFile(workspace.repoRoot, report.activeHost);
   appendMemoryEntry(report.memoryPath, report.memoryLine);
+}
+
+function isLuauQuickFile(file) {
+  const text = String(file || '').toLowerCase();
+  return text.endsWith('.lua') || text.endsWith('.luau');
 }
 
 function isQuickFixFile(file) {
@@ -1360,6 +1392,59 @@ function handleQuickFix(workspace, flags, positional) {
   console.log(`Agent: ${report.agent}`);
   console.log(`Skill: ${report.skill}`);
   console.log(`Checks: ${report.checks.join(', ')}`);
+  console.log('[QUICK GATE]');
+  console.log(`Target changed: ${report.targetChanged ? 'yes' : 'no'}`);
+  console.log(`No side effects: ${report.noSideEffects ? 'yes' : 'no'}`);
+  console.log(`Code/config only: ${report.codeConfigOnly ? 'yes' : 'no'}`);
+  console.log(`Ready: ${report.ready ? 'yes' : 'no'}`);
+  console.log('[QUICK MEMORY]');
+  console.log(`Where: ${path.relative(workspace.repoRoot, report.memoryPath)}`);
+  console.log(`What: ${report.memoryLine}`);
+  console.log(`Scope: ${report.scope}`);
+
+  if (!report.ready) {
+    process.exit(1);
+  }
+}
+
+function handleLuauQuick(workspace, flags, positional) {
+  const hostName = normalizeHostName(flags.host || workspace.activeHostName);
+  const candidate = detectLuauQuickCandidate(workspace.repoRoot);
+  if (!candidate) {
+    console.error('Usage: agent-system luau-quick (one Luau file must be changed)');
+    process.exit(1);
+  }
+
+  const report = buildQuickFixReport(workspace, candidate, hostName, {
+    kind: 'agent-system-luau-quick',
+    memoryLine: candidate.memoryLine,
+    language: 'Luau',
+    luauQuick: true,
+    checks: candidate.checks,
+    reason: candidate.reason,
+    risk: candidate.risk,
+    change: candidate.change,
+    scope: candidate.scope,
+    agent: candidate.agent,
+    skill: candidate.skill,
+  });
+  writeQuickFixRecord(workspace, report);
+  captureQuickFixMemory(workspace, report);
+
+  console.log('[LUAU QUICK]');
+  console.log(`Luau target: ${report.target}`);
+  console.log(`Host: ${report.activeHost}`);
+  console.log(`Language: ${report.language}`);
+  console.log('[QUICK LOCK]');
+  console.log(`Target: ${report.target}`);
+  console.log(`Change: ${report.change}`);
+  console.log(`Risk: ${report.risk}`);
+  console.log('[QUICK ROUTE]');
+  console.log(`Type: quick-fix`);
+  console.log(`Agent: ${report.agent}`);
+  console.log(`Skill: ${report.skill}`);
+  console.log(`Checks: ${report.checks.join(', ')}`);
+  console.log(`Language: ${report.language}`);
   console.log('[QUICK GATE]');
   console.log(`Target changed: ${report.targetChanged ? 'yes' : 'no'}`);
   console.log(`No side effects: ${report.noSideEffects ? 'yes' : 'no'}`);
@@ -2433,6 +2518,10 @@ function printQuickFixRouteSummary(candidate, explain = false) {
   console.log('[QUICK ROUTE]');
   console.log(`Type: quick-fix`);
   console.log(`Target: ${candidate.target}`);
+  if (isLuauQuickFile(candidate.target)) {
+    console.log(`Language: Luau`);
+    console.log(`Luau target: yes`);
+  }
   console.log(`Agent: ${candidate.agent}`);
   console.log(`Skill: ${candidate.skill}`);
   console.log(`Checks: ${candidate.checks.join(', ')}`);

@@ -1,6 +1,6 @@
 {
   "name": "agent-system",
-  "version": "0.5.3.5",
+  "version": "0.5.4",
   "private": true,
   "type": "module",
   "description": "Agent-system CLI for validation, routing, sync, memory, and profile maintenance.",
@@ -50,6 +50,7 @@
     "quick-update": "node ./bin/agent-system.mjs quick-update",
     "upgrade": "node ./bin/agent-system.mjs upgrade",
     "quick-fix": "node ./bin/agent-system.mjs quick-fix",
+    "luau-quick": "node ./bin/agent-system.mjs luau-quick",
     "train": "node ./bin/agent-system.mjs train",
     "eval": "node ./bin/agent-system.mjs eval",
     "backup": "node ./bin/agent-system.mjs backup",

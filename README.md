@@ -67,11 +67,11 @@ Short form:
 qwen extensions install Nanana291/agent-system
 ```
 
-## V0.5.3.5 scope
+## V0.5.4 scope
 
-This release adds the evaluation loop. The repository can now simulate a run, score it, compare it against the last evaluation, and promote the durable lessons into the active profile and host memories when the score clears the threshold.
+This release adds a Luau-specific fast path on top of the existing quick-fix flow. When the workspace has exactly one touched Luau file, `luau-quick` can write a Luau lock, gate, and memory note directly into the active host memory while `route` still keeps the generic quick-fix path available for single-file code and config changes.
 
-The quick-fix fast path also landed here: when `route` sees one code or config file touched, it can suggest a single-file quick lock instead of sending the change through the full intake path.
+The earlier evaluation loop remains in place: the repository can still simulate a run, score it, compare it against the last evaluation, and promote the durable lessons into the active profile and host memories when the score clears the threshold.
 
 ## Memory layer
 
@@ -113,6 +113,7 @@ node ./bin/agent-system.mjs train
 node ./bin/agent-system.mjs train error --host qwen
 node ./bin/agent-system.mjs train replay --host qwen
 node ./bin/agent-system.mjs quick-fix --host qwen
+node ./bin/agent-system.mjs luau-quick --host qwen
 node ./bin/agent-system.mjs eval
 node ./bin/agent-system.mjs eval compare --host qwen
 node ./bin/agent-system.mjs eval promote --host qwen

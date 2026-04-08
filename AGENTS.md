@@ -53,6 +53,8 @@ Durable rules should be written where they belong first, then kept inside the ho
 - `quick-update` prepares a ready-to-review update intake from target and intent without requiring `git diff`.
 - `quick-fix` handles a single-file code/config fix with a fast lock, fast gate, and quick memory capture.
 - `route` auto-suggests `quick-fix` when the workspace has exactly one touched code/config file.
+- `luau-quick` handles a single-file Luau fix with a Luau-specific lock, gate, and memory note.
+- `route` keeps the generic quick-fix path for single-file code/config edits and adds Luau-specific wording when the single touched file is Luau.
 - `upgrade` applies multi-agent instruction upgrades and syncs the resulting memory into the active profile and all supported host memories.
 - `docs/training/current.json`, `docs/training/history.jsonl`, and `docs/training/<session>.md` record the automatic training loop.
 - `train`, `train error`, `train review`, `train replay`, `train promote`, and `train sync` train several agents at once, sync the active host memory, and write an auditable lesson trail.
@@ -61,6 +63,6 @@ Durable rules should be written where they belong first, then kept inside the ho
 - `memory/change/<host>.md` stores auto-captured lessons from change gates before promotion into that same host's memory file.
 - `memory learn` auto-promotes repeated change lessons into the active host's memory file during a successful gate.
 
-## V0.5.3.5 intent
+## V0.5.4 intent
 
-This release adds portable recovery, quick update entry points, the single-file quick-fix path, multi-agent upgrade syncing, the new automatic training loop, and the evaluation loop on top of the routing and memory scaffold: the repo can snapshot the mutable workspace, validate the bundle, prune duplicate noise, restore the state back into a clean checkout, prepare a fast update intake from just target plus intent, suggest a quick lock when one code/config file is touched, apply direct instruction upgrades across several agents, train those agents directly into the active host and profile memory without duplicating the sync block, and then score the workspace so only durable lessons are promoted into memory.
+This release keeps the portable recovery, training, and evaluation layers intact, and adds a Luau-specific quick path on top of the single-file fast fix flow: the repo can still snapshot the mutable workspace, validate the bundle, prune duplicate noise, restore the state back into a clean checkout, prepare a fast update intake from just target plus intent, suggest a quick lock when one code/config file is touched, and now write a Luau lock, gate, and memory note directly when the single changed file is a Luau script.
