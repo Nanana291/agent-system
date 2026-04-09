@@ -17,6 +17,9 @@ import {
   writeMetricsSnapshot,
 } from '../lib/metrics.mjs';
 import { runLuauRegressionGate, renderLuauRegressionGate } from '../lib/luau-regression-gate.mjs';
+import { runLuauRemoteMap, renderLuauRemoteMap } from '../lib/luau-remote-map.mjs';
+import { runLuauSecurityScan, renderLuauSecurityScan } from '../lib/luau-security-scan.mjs';
+import { runLuauComplexity, renderLuauComplexity } from '../lib/luau-complexity.mjs';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -79,6 +82,15 @@ async function main() {
       return;
     case 'luau-regression-gate':
       handleLuauRegressionGate(workspace, flags, positional);
+      return;
+    case 'luau-remote-map':
+      handleLuauRemoteMap(workspace, flags, positional);
+      return;
+    case 'luau-security-scan':
+      handleLuauSecurityScan(workspace, flags, positional);
+      return;
+    case 'luau-complexity':
+      handleLuauComplexity(workspace, flags, positional);
       return;
     case 'train':
       handleTrain(workspace, flags, positional);
@@ -7319,4 +7331,44 @@ function handleLuauRegressionGate(workspace, flags, positional) {
   if (result.verdict === 'BLOCKED') {
     process.exit(1);
   }
+}
+
+function handleLuauRemoteMap(workspace, flags, positional) {
+  const filePath = positional[0];
+  if (!filePath) {
+    console.error('Usage: agent-system luau-remote-map <file-path>');
+    process.exit(1);
+  }
+
+  const result = runLuauRemoteMap(filePath);
+  const rendered = renderLuauRemoteMap(result);
+  console.log(rendered);
+}
+
+function handleLuauSecurityScan(workspace, flags, positional) {
+  const filePath = positional[0];
+  if (!filePath) {
+    console.error('Usage: agent-system luau-security-scan <file-path>');
+    process.exit(1);
+  }
+
+  const result = runLuauSecurityScan(filePath);
+  const rendered = renderLuauSecurityScan(result);
+  console.log(rendered);
+
+  if (result.verdict === 'MALICIOUS' || result.verdict === 'SUSPICIOUS') {
+    process.exit(1);
+  }
+}
+
+function handleLuauComplexity(workspace, flags, positional) {
+  const filePath = positional[0];
+  if (!filePath) {
+    console.error('Usage: agent-system luau-complexity <file-path>');
+    process.exit(1);
+  }
+
+  const result = runLuauComplexity(filePath);
+  const rendered = renderLuauComplexity(result);
+  console.log(rendered);
 }

@@ -1,6 +1,6 @@
 {
   "name": "agent-system",
-  "version": "0.6.6.0",
+  "version": "0.6.7.0",
   "private": true,
   "type": "module",
   "description": "Agent-system CLI for validation, routing, sync, memory, and profile maintenance.",
@@ -102,6 +102,8 @@
     "luau-remote-map": "node ./bin/agent-system.mjs luau-remote-map",
     "luau-flow": "node ./bin/agent-system.mjs luau-flow",
     "luau-changelog": "node ./bin/agent-system.mjs luau-changelog",
-    "luau-template": "node ./bin/agent-system.mjs luau-template"
+    "luau-template": "node ./bin/agent-system.mjs luau-template",
+    "luau-security-scan": "node ./bin/agent-system.mjs luau-security-scan",
+    "luau-complexity": "node ./bin/agent-system.mjs luau-complexity"
   }
 }

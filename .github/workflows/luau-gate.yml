@@ -1,0 +1,171 @@
+name: Luau Gate
+
+on:
+  pull_request:
+    paths:
+      - '**.lua'
+      - 'lib/**/*.mjs'
+      - 'bin/**/*.mjs'
+      - 'agent-system.json'
+  push:
+    branches: [main]
+    paths:
+      - '**.lua'
+      - 'lib/**/*.mjs'
+
+jobs:
+  luau-regression-gate:
+    name: Luau Regression Gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Find changed Luau files
+        id: changed-files
+        uses: tj-actions/changed-files@v45
+        with:
+          files: '**/*.lua'
+
+      - name: Install dependencies
+        if: steps.changed-files.outputs.any_changed == 'true'
+        run: |
+          if [ -f package.json ]; then
+            npm ci
+          fi
+
+      - name: Run Luau Regression Gate
+        if: steps.changed-files.outputs.any_changed == 'true'
+        env:
+          CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+        run: |
+          GATE_PASSED=true
+          for file in $CHANGED_FILES; do
+            echo "══════════════════════════════════════════"
+            echo "Gate: $file"
+            echo "══════════════════════════════════════════"
+            if ! node lib/luau-regression-gate.mjs "$file"; then
+              GATE_PASSED=false
+              echo "❌ BLOCKED: $file"
+            else
+              echo "✅ PASSED: $file"
+            fi
+            echo ""
+          done
+          if [ "$GATE_PASSED" = false ]; then
+            echo "🚫 One or more files failed the Luau regression gate."
+            echo "Fix the BLOCK checks before merging."
+            exit 1
+          fi
+
+  luau-security-scan:
+    name: Luau Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Find changed Luau files
+        id: changed-files
+        uses: tj-actions/changed-files@v45
+        with:
+          files: '**/*.lua'
+
+      - name: Run Luau Security Scan
+        if: steps.changed-files.outputs.any_changed == 'true'
+        env:
+          CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+        run: |
+          SCAN_PASSED=true
+          for file in $CHANGED_FILES; do
+            echo "══════════════════════════════════════════"
+            echo "Security Scan: $file"
+            echo "══════════════════════════════════════════"
+            if ! node lib/luau-security-scan.mjs "$file"; then
+              SCAN_PASSED=false
+              echo "⚠️ SUSPICIOUS/MALICIOUS: $file"
+            else
+              echo "✅ CLEAN: $file"
+            fi
+            echo ""
+          done
+          if [ "$SCAN_PASSED" = false ]; then
+            echo "⚠️ Security concerns detected. Review the scan output above."
+            exit 1
+          fi
+
+  luau-complexity-check:
+    name: Luau Complexity Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Find changed Luau files
+        id: changed-files
+        uses: tj-actions/changed-files@v45
+        with:
+          files: '**/*.lua'
+
+      - name: Run Luau Complexity Check
+        if: steps.changed-files.outputs.any_changed == 'true'
+        env:
+          CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+        run: |
+          for file in $CHANGED_FILES; do
+            echo "══════════════════════════════════════════"
+            echo "Complexity: $file"
+            echo "══════════════════════════════════════════"
+            node lib/luau-complexity.mjs "$file"
+            echo ""
+          done
+
+  luau-remote-audit:
+    name: Luau Remote Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Find changed Luau files
+        id: changed-files
+        uses: tj-actions/changed-files@v45
+        with:
+          files: '**/*.lua'
+
+      - name: Run Luau Remote Map
+        if: steps.changed-files.outputs.any_changed == 'true'
+        env:
+          CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+        run: |
+          for file in $CHANGED_FILES; do
+            echo "══════════════════════════════════════════"
+            echo "Remote Map: $file"
+            echo "══════════════════════════════════════════"
+            node lib/luau-remote-map.mjs "$file"
+            echo ""
+          done
