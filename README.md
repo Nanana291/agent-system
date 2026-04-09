@@ -123,6 +123,14 @@ This release adds 4 commands for auto-documentation, brain analytics, safe refac
 - **`luau-refactor`** — Safe automatic refactoring: wraps unprotected FireServer in pcallRef, reports GetService caching opportunities, reports FindFirstChild-in-loop cache opportunities, identifies dead functions. Creates `.bak` backup before modifying
 - **`dashboard`** — System health panel showing manifest, brain, memory, training, upgrade, change, metrics, and profile status in a single view with overall health score
 
+## V0.8.0.0 — Context & Flow Tools
+
+This release adds 3 commands for context management, module splitting, and data flow verification — designed for precision work on scripts of any size:
+
+- **`luau-symbol-map`** — Extracts every symbol from a Luau script: functions (params, return type inference, complexity, remote usage, pcall), variables (type inference, scope, read/write counts, service detection), remotes (definitions, all call sites, pcall audit, event connections), tables (keys, state detection, usage counts), events (Changed, Click, CharacterAdded, remote events), loops (name inference, wait/pcall checks, interval detection), constants. Output as compact JSON (for context-efficient querying) or structured Markdown with cross-references (call graph, variable usage by function, remote callers). The symbol map replaces reading the full file — load the JSON instead of 5000+ lines
+- **`luau-chunk`** — Splits monolithic scripts into logical modules using domain classification. Identifies 7 domains: State (GetService, require, Toggles/Options), UI (BuildToggle, AddTab, paragraphs), Remote (FireServer, OnClientEvent), Logic (taskSpawn, while loops, task.wait), Config (SetFolder, SaveManager), Lifecycle (CharacterAdded, StartLoop/StopLoop), Utility (format helpers, math). Merges small domains automatically (< 30 lines into parent). Generates Main.lua with proper load order + separate chunk files
+- **`luau-verify-flow`** — Comprehensive data flow verification: def-use chains (use-before-def detection, dangling references, defined-but-never-used), function signatures (excess argument detection), remote completeness (defined-but-unused remotes, unprotected client→server calls), callback connections (empty Connect calls, connections to undefined functions), loop integrity (taskSpawn without while, loops without task.wait, missing character validation), character lifecycle (missing CharacterAdded rebind, unsafe HumanoidRootPart access), state table consistency (UI keys missing from Toggles/Options). Score 0-100, exit code 1 on FAIL
+
 ## Memory layer
 
 The repo now treats memory as flat and host-specific:

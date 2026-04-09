@@ -33,6 +33,9 @@ import { runLuauDocGen, renderDocGenMarkdown } from '../lib/luau-docgen.mjs';
 import { runBrainStats, renderBrainStats } from '../lib/brain-stats.mjs';
 import { runLuauRefactor, renderLuauRefactor } from '../lib/luau-refactor.mjs';
 import { runDashboard, renderDashboard } from '../lib/dashboard.mjs';
+import { runLuauSymbolMap, renderSymbolMapJSON, renderSymbolMapMarkdown } from '../lib/luau-symbol-map.mjs';
+import { runLuauChunk, renderLuauChunk, renderLuauChunkJSON } from '../lib/luau-chunk.mjs';
+import { runLuauVerifyFlow, renderLuauVerifyFlow } from '../lib/luau-verify-flow.mjs';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -143,6 +146,15 @@ async function main() {
       return;
     case 'dashboard':
       handleDashboard(workspace, flags, positional);
+      return;
+    case 'luau-symbol-map':
+      handleLuauSymbolMap(workspace, flags, positional);
+      return;
+    case 'luau-chunk':
+      handleLuauChunk(workspace, flags, positional);
+      return;
+    case 'luau-verify-flow':
+      handleLuauVerifyFlow(workspace, flags, positional);
       return;
     case 'train':
       handleTrain(workspace, flags, positional);
@@ -413,6 +425,15 @@ function parseArgs(argv) {
       flags[arg] = true;
       continue;
     }
+    if (arg === '--json') {
+      flags.json = true;
+      continue;
+    }
+    if (arg === '--output-dir') {
+      flags.outputDir = argv[i + 1];
+      i += 1;
+      continue;
+    }
     if (arg === '--classification') {
       flags.classification = argv[i + 1];
       i += 1;
@@ -546,6 +567,12 @@ function printHelp() {
     '    --output <file.md>  Write documentation to file (default: stdout)',
     '  luau-refactor  Safe automatic refactoring (pcall wrap, cache, dead code)',
     '  dashboard    System health panel (brain, memory, training, upgrade, metrics)',
+    '  luau-symbol-map Extract all symbols (functions, vars, remotes, tables, events, loops) as JSON/Markdown',
+    '    --output <file.json|file.md>  Write output to file (default: stdout)',
+    '    --json  Force JSON output (default: markdown)',
+    '  luau-chunk  Split monolithic script into logical modules (State, UI, Remote, Logic, Config)',
+    '    --output-dir <dir>  Write chunk files to directory (default: stdout report)',
+    '  luau-verify-flow Verify data flow: def-use chains, function signatures, remote completeness, callback connections, loop integrity',
     '  train      Train multiple agents and sync training memory and docs',
     '    error    Record prevention rules instead of a success lesson',
     '    review   Review the latest host state without changing the route',
@@ -7669,4 +7696,72 @@ function handleDashboard(workspace, flags, positional) {
   const result = runDashboard(workspace);
   const rendered = renderDashboard(result);
   console.log(rendered);
+}
+
+function handleLuauSymbolMap(workspace, flags, positional) {
+  const filePath = positional[0];
+  if (!filePath) {
+    console.error('Usage: agent-system luau-symbol-map <file.lua> [--output <file>] [--json]');
+    process.exit(1);
+  }
+
+  const map = runLuauSymbolMap(filePath);
+  const useJson = flags.json || (flags.output && flags.output.endsWith('.json'));
+  const output = useJson ? renderSymbolMapJSON(map) : renderSymbolMapMarkdown(map);
+
+  if (flags.output) {
+    const outPath = path.resolve(flags.output);
+    fs.writeFileSync(outPath, output + '\n', 'utf8');
+    console.log(`Symbol map written to ${outPath}`);
+  } else {
+    console.log(output);
+  }
+}
+
+function handleLuauChunk(workspace, flags, positional) {
+  const filePath = positional[0];
+  if (!filePath) {
+    console.error('Usage: agent-system luau-chunk <file.lua> [--output-dir <dir>]');
+    process.exit(1);
+  }
+
+  const result = runLuauChunk(filePath);
+
+  if (flags.outputDir) {
+    const dirPath = path.resolve(flags.outputDir);
+    if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
+
+    // Write main.lua
+    fs.writeFileSync(path.join(dirPath, 'Main.lua'), result.mainScript + '\n', 'utf8');
+
+    // Write chunk files
+    for (const cf of result.chunkFiles) {
+      fs.writeFileSync(path.join(dirPath, cf.fileName), cf.lines.join('\n') + '\n', 'utf8');
+    }
+
+    console.log(`Chunks written to ${dirPath}:`);
+    console.log(`  Main.lua`);
+    for (const cf of result.chunkFiles) {
+      console.log(`  ${cf.fileName} (${cf.lineCount} lines)`);
+    }
+  } else {
+    const rendered = renderLuauChunk(result);
+    console.log(rendered);
+  }
+}
+
+function handleLuauVerifyFlow(workspace, flags, positional) {
+  const filePath = positional[0];
+  if (!filePath) {
+    console.error('Usage: agent-system luau-verify-flow <file.lua>');
+    process.exit(1);
+  }
+
+  const result = runLuauVerifyFlow(filePath);
+  const rendered = renderLuauVerifyFlow(result);
+  console.log(rendered);
+
+  if (result.verdict === 'FAIL') {
+    process.exit(1);
+  }
 }
