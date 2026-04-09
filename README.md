@@ -21,6 +21,7 @@ Superpowers decides how to work: brainstorming, planning, debugging, or test-dri
 - `commands/`, `skills/`, `agents/`, and `templates/` provide the shared orchestration surface.
 - `adapters/` holds host-specific bootstrap notes for Claude Code, Codex, and Qwen Code.
 - `docs/brain/` stores the structured second brain that collects durable lessons from change, train, eval, memory, upgrade, and recovery flows.
+- `docs/metrics/` stores the materialized workspace metrics trail: `current.json`, `history.jsonl`, and immutable `snapshots/`.
 
 ## Supported hosts
 
@@ -68,13 +69,15 @@ Short form:
 qwen extensions install Nanana291/agent-system
 ```
 
-## V0.6.4.3 scope
+## V0.6.4.4 scope
 
-This release keeps `/upgrade` as a learning-aware pipeline, but closes the release-critical proof gap with executable enforcement. `upgrade preview`, `upgrade learn`, `upgrade apply`, `upgrade sync`, `upgrade report`, `upgrade status`, `upgrade replay`, and the new `delivery-check` gate now make the upgrade trail and delivery closure verifiable instead of markdown-only. The CLI surface also exposes `npm run luau-train` and `npm run upgrade-status` as direct aliases for the common Luau training and upgrade status paths.
+This release keeps `/upgrade` as a learning-aware pipeline, but closes the release-critical proof gap with executable enforcement and adds a materialized metrics trail. `upgrade preview`, `upgrade learn`, `upgrade apply`, `upgrade sync`, `upgrade report`, `upgrade status`, `upgrade replay`, and the new `delivery-check` gate now make the upgrade trail and delivery closure verifiable instead of markdown-only. The CLI surface also exposes `npm run luau-train`, `npm run upgrade-status`, `npm run metrics`, `npm run metrics-trend`, and `npm run metrics-compare` as direct aliases for the common Luau, upgrade, and metrics paths.
 
 The upgrade pipeline is still per-agent. It learns from the active target, dedupes lessons against prior upgrade history, writes a durable upgrade snapshot in `docs/upgrade/current.json`, appends `docs/upgrade/history.jsonl`, and syncs the learned result into the profile doc plus host memory. Upgrade sessions stay materialized under `docs/upgrade/sessions/` so replay can compare the current docs against the last known good snapshot.
 
 The brain remains event-sourced and fed by `change`, `train`, `eval`, `memory`, `upgrade`, and recovery flows. Durable lessons continue to land in `docs/brain/current.json` and `docs/brain/history.jsonl`, then sync into host and profile memory once they stabilize. Brain hygiene now has a deterministic dedupe path so duplicate notes can be surfaced and consolidated.
+
+The metrics trail uses the same materialized contract as the other runtime histories. `docs/metrics/current.json` holds the latest snapshot, `docs/metrics/history.jsonl` keeps append-only history, and `docs/metrics/snapshots/` stores immutable captures. `metrics`, `metrics trend`, and `metrics compare` read those files, while `train` and `upgrade` append fresh snapshots after successful runs.
 
 Learning recovery still exists: `memory snapshot`, `memory restore`, `memory diff`, `memory rollback`, and `train rollback` preserve host learning state as a recoverable snapshot. Training packs remain versioned, host histories stay separated, and Luau repair / Luau learning still feed the training loop automatically.
 
@@ -135,6 +138,9 @@ node ./bin/agent-system.mjs train
 node ./bin/agent-system.mjs train status --host qwen
 node ./bin/agent-system.mjs train history --host qwen --limit 5
 node ./bin/agent-system.mjs luau-train
+node ./bin/agent-system.mjs metrics
+node ./bin/agent-system.mjs metrics trend
+node ./bin/agent-system.mjs metrics compare
 node ./bin/agent-system.mjs train error --host qwen
 node ./bin/agent-system.mjs train replay --host qwen
 node ./bin/agent-system.mjs train rollback --host qwen

@@ -7,6 +7,15 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { buildDeliveryGateReport, renderDeliveryGate } from '../lib/artifacts.mjs';
 import { buildBrainDedupeReport, renderBrainDedupeReport } from '../lib/brain-hygiene.mjs';
+import {
+  buildMetricsCompareReport,
+  buildMetricsReport,
+  readMetricsCurrent,
+  renderMetricsCompare,
+  renderMetricsSummary,
+  renderMetricsTrend,
+  writeMetricsSnapshot,
+} from '../lib/metrics.mjs';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -42,6 +51,9 @@ async function main() {
       return;
     case 'delivery-check':
       handleDeliveryCheck(workspace);
+      return;
+    case 'metrics':
+      handleMetrics(workspace, flags, positional);
       return;
     case 'upgrade':
       handleUpgrade(workspace, flags, positional);
@@ -395,6 +407,10 @@ function printHelp() {
     '    gate     Validate the current change intake and delivery gate',
     '  quick-update Prepare a fast update intake from target + intent',
     '  delivery-check Validate the executable delivery gate for the current workspace',
+    '  metrics    Show, snapshot, trend, or compare workspace metrics',
+    '    snapshot Capture the current metrics state into docs/metrics/',
+    '    trend    Compare the current metrics snapshot against recent history',
+    '    compare  Compare the current metrics snapshot against a prior snapshot',
     '  upgrade    Run the learning-aware upgrade pipeline',
     '    preview  Inspect the target without writing files',
     '    learn    Derive and persist per-agent lessons',
@@ -539,6 +555,11 @@ function loadWorkspace(profileName, hostName) {
   const evalHistoryPath = path.join(repoRoot, manifest.eval?.history || 'docs/evals/history.jsonl');
   const evalReadmePath = path.join(repoRoot, manifest.eval?.readme || 'docs/evals/README.md');
   const evalSchemaPath = path.join(repoRoot, manifest.eval?.schema || 'docs/evals-schema.md');
+  const metricsDir = path.join(repoRoot, manifest.paths?.metrics || 'docs/metrics');
+  const metricsCurrentPath = path.join(repoRoot, manifest.metrics?.current || 'docs/metrics/current.json');
+  const metricsHistoryPath = path.join(repoRoot, manifest.metrics?.history || 'docs/metrics/history.jsonl');
+  const metricsReadmePath = path.join(repoRoot, manifest.metrics?.readme || 'docs/metrics/README.md');
+  const metricsSnapshotsDir = path.join(repoRoot, manifest.metrics?.snapshots || 'docs/metrics/snapshots');
   const upgradeDir = path.join(repoRoot, manifest.paths?.upgrade || 'docs/upgrade');
   const upgradeCurrentPath = path.join(repoRoot, manifest.upgrade?.current || 'docs/upgrade/current.json');
   const upgradeHistoryPath = path.join(repoRoot, manifest.upgrade?.history || 'docs/upgrade/history.jsonl');
@@ -586,6 +607,11 @@ function loadWorkspace(profileName, hostName) {
     evalHistoryPath,
     evalReadmePath,
     evalSchemaPath,
+    metricsDir,
+    metricsCurrentPath,
+    metricsHistoryPath,
+    metricsReadmePath,
+    metricsSnapshotsDir,
     upgradeDir,
     upgradeCurrentPath,
     upgradeHistoryPath,
@@ -650,6 +676,7 @@ function handleValidate(workspace) {
   const { trainingContinuousPath, trainingContinuousHistoryPath, trainingContinuousReadmePath } = workspace;
   const { upgradeCurrentPath, upgradeHistoryPath, upgradeReadmePath } = workspace;
   const { brainCurrentPath, brainHistoryPath, brainReadmePath, brainSchemaPath } = workspace;
+  const { metricsCurrentPath, metricsHistoryPath, metricsReadmePath, metricsSnapshotsDir } = workspace;
   const luauReadmePath = path.join(repoRoot, 'docs', 'luau', 'README.md');
   const luauCurrentPath = path.join(repoRoot, 'docs', 'luau', 'current.json');
   const luauHistoryPath = path.join(repoRoot, 'docs', 'luau', 'history.jsonl');
@@ -770,6 +797,18 @@ function handleValidate(workspace) {
   if (!fs.existsSync(evalSchemaPath)) {
     issues.push(`missing eval schema: ${path.relative(repoRoot, evalSchemaPath)}`);
   }
+  if (!fs.existsSync(metricsReadmePath)) {
+    issues.push(`missing metrics readme: ${path.relative(repoRoot, metricsReadmePath)}`);
+  }
+  if (!fs.existsSync(metricsCurrentPath)) {
+    issues.push(`missing metrics current snapshot: ${path.relative(repoRoot, metricsCurrentPath)}`);
+  }
+  if (!fs.existsSync(metricsHistoryPath)) {
+    issues.push(`missing metrics history: ${path.relative(repoRoot, metricsHistoryPath)}`);
+  }
+  if (!fs.existsSync(metricsSnapshotsDir)) {
+    issues.push(`missing metrics snapshots dir: ${path.relative(repoRoot, metricsSnapshotsDir)}`);
+  }
   if (!fs.existsSync(luauReadmePath)) {
     issues.push(`missing luau repair readme: ${path.relative(repoRoot, luauReadmePath)}`);
   }
@@ -879,6 +918,44 @@ function handleDeliveryCheck(workspace) {
   if (report.blockedOrReady !== 'Ready') {
     process.exit(1);
   }
+}
+
+function handleMetrics(workspace, flags, positional) {
+  const actionInput = positional[0];
+  const action = String(actionInput || 'show').trim().toLowerCase();
+  const snapshotInput = flags.files?.[0] || positional[1] || '';
+
+  if (action === 'snapshot') {
+    const snapshot = writeMetricsSnapshot(workspace, 'snapshot');
+    console.log(renderMetricsSummary(snapshot));
+    return;
+  }
+
+  if (!fs.existsSync(workspace.metricsCurrentPath)) {
+    console.error('No metrics snapshot found. Run `agent-system metrics snapshot` first.');
+    process.exit(1);
+  }
+  const current = readMetricsCurrent(workspace);
+
+  if (action === 'trend') {
+    const report = buildMetricsReport(workspace);
+    console.log(renderMetricsTrend(report));
+    return;
+  }
+
+  if (action === 'compare') {
+    const report = buildMetricsCompareReport(workspace, snapshotInput ? [snapshotInput] : []);
+    console.log(renderMetricsCompare(report));
+    return;
+  }
+
+  if (action === 'show' || action === '') {
+    console.log(renderMetricsSummary(current));
+    return;
+  }
+
+  console.error(`Unknown metrics action: ${actionInput}`);
+  process.exit(1);
 }
 
 function printProfile(workspace) {
@@ -3227,6 +3304,12 @@ function persistUpgradeSnapshot(workspace, report, phase) {
   fs.mkdirSync(workspace.upgradeSessionsDir, { recursive: true });
   fs.writeFileSync(summaryAbsolutePath, renderUpgradeSessionDoc(current), 'utf8');
   captureBrainFromUpgrade(workspace, current);
+  captureMetricsTrail(workspace, {
+    source: 'upgrade',
+    mode: current.mode,
+    host: current.activeHost,
+    focus: inferUpgradeScopeName(current.scope),
+  });
   return current;
 }
 
@@ -3325,6 +3408,22 @@ function handleTrain(workspace, flags, positional) {
   }
   if (report.luauLesson) {
     console.log(`Luau lesson: ${report.luauLesson}`);
+  }
+  captureMetricsTrail(workspace, {
+    source: 'train',
+    mode: report.mode,
+    host: hostName,
+    focus: report.focus || 'general',
+  });
+}
+
+function captureMetricsTrail(workspace, context) {
+  try {
+    const current = writeMetricsSnapshot(workspace, context.source || 'manual');
+    return current;
+  } catch (error) {
+    console.error(`[METRICS] ${error instanceof Error ? error.message : String(error)}`);
+    return null;
   }
 }
 
@@ -5470,6 +5569,10 @@ function buildLintReport(workspace) {
     ['eval history exists', () => fs.existsSync(workspace.evalHistoryPath)],
     ['eval readme exists', () => fs.existsSync(workspace.evalReadmePath)],
     ['eval schema exists', () => fs.existsSync(workspace.evalSchemaPath)],
+    ['metrics readme exists', () => fs.existsSync(workspace.metricsReadmePath)],
+    ['metrics current exists', () => fs.existsSync(workspace.metricsCurrentPath)],
+    ['metrics history exists', () => fs.existsSync(workspace.metricsHistoryPath)],
+    ['metrics snapshots dir exists', () => fs.existsSync(workspace.metricsSnapshotsDir)],
     ['luau repair readme exists', () => fs.existsSync(path.join(workspace.repoRoot, 'docs', 'luau', 'README.md'))],
     ['luau repair snapshot exists', () => fs.existsSync(path.join(workspace.repoRoot, 'docs', 'luau', 'current.json'))],
     ['luau repair history exists', () => fs.existsSync(path.join(workspace.repoRoot, 'docs', 'luau', 'history.jsonl'))],
