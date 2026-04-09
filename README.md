@@ -105,6 +105,15 @@ This release adds 5 new commands for Luau script analysis and brain management:
 - **`luau-ui-map`** — UI hierarchy extraction: outputs tab → section → control tree with event wiring summary
 - **`brain-import`** — External brain import: loads JSON entries with deduplication, normalization, and optional merge
 
+## V0.6.9.0 — Performance & Diff Tools
+
+This release adds 4 more commands for performance profiling, dead code detection, brain export, and semantic diff:
+
+- **`luau-perf-profile`** — Static performance profiler: FindFirstChild in loops, uncached GetService, table creation in hot paths, repeated requires, global lookups. Scores 0-100 with actionable fix suggestions
+- **`luau-dead-code`** — Dead code detector: uncalled functions, unread locals, unreachable code after return, unused remotes, empty functions, unused parameters. Reports % dead code
+- **`brain-export`** — Portable brain export with filters (scope, tag, quality, domain, search) and JSON output. Complements `brain-import` for round-trip knowledge sharing
+- **`luau-diff-report`** — Semantic diff between two script versions: function adds/removes/size changes, remote diffs, feature parity, UI framework changes, loop count deltas. Verdicts: REGRESSION / EXPANSION / RESTRUCTURE / INCREMENTAL
+
 ## Memory layer
 
 The repo now treats memory as flat and host-specific:

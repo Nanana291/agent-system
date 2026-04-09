@@ -25,6 +25,10 @@ import { runLuauVerifyFeatures, renderLuauVerifyFeatures } from '../lib/luau-ver
 import { runLuauPcallAudit, renderLuauPcallAudit } from '../lib/luau-pcall-audit.mjs';
 import { runLuauUIMap, renderLuauUIMap } from '../lib/luau-ui-map.mjs';
 import { runBrainImport, mergeBrainImport, renderBrainImport, renderBrainMerge } from '../lib/brain-import.mjs';
+import { runBrainExport, writeBrainExport, renderBrainExport } from '../lib/brain-export.mjs';
+import { runLuauPerfProfile, renderLuauPerfProfile } from '../lib/luau-perf-profile.mjs';
+import { runLuauDeadCode, renderLuauDeadCode } from '../lib/luau-dead-code.mjs';
+import { runLuauDiffReport, renderLuauDiffReport } from '../lib/luau-diff-report.mjs';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -111,6 +115,18 @@ async function main() {
       return;
     case 'brain-import':
       handleBrainImport(workspace, flags, positional);
+      return;
+    case 'brain-export':
+      handleBrainExport(workspace, flags, positional);
+      return;
+    case 'luau-perf-profile':
+      handleLuauPerfProfile(workspace, flags, positional);
+      return;
+    case 'luau-dead-code':
+      handleLuauDeadCode(workspace, flags, positional);
+      return;
+    case 'luau-diff-report':
+      handleLuauDiffReport(workspace, flags, positional);
       return;
     case 'train':
       handleTrain(workspace, flags, positional);
@@ -352,6 +368,31 @@ function parseArgs(argv) {
       i += 1;
       continue;
     }
+    if (arg === '--output') {
+      flags.output = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--quality') {
+      flags.quality = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--domain') {
+      flags.domain = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--search') {
+      flags.search = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--merge') {
+      flags.merge = true;
+      i += 0;
+      continue;
+    }
     if (arg === '--classification') {
       flags.classification = argv[i + 1];
       i += 1;
@@ -469,8 +510,17 @@ function printHelp() {
     '  luau-verify-features Verify feature parity between source and baseline',
     '  luau-pcall-audit Audit all remote calls for pcall safety',
     '  luau-ui-map Extract UI hierarchy and event wiring',
+    '  luau-perf-profile Static performance profiling with fix suggestions',
+    '  luau-dead-code Detect unused functions, variables, and unreachable code',
+    '  luau-diff-report Semantic diff between two Luau script versions',
     '  brain-import Import brain entries from external JSON files',
     '    --merge  Merge new entries into the current brain',
+    '  brain-export Export brain entries to portable JSON',
+    '    --scope <scope>  Filter by scope (host:qwen, profile, etc.)',
+    '    --tag <tag>      Filter by tag (repeatable)',
+    '    --quality <q>    Filter by quality (high/medium/low)',
+    '    --domain <d>     Filter by domain',
+    '    --output <file>  Write to file instead of preview',
     '  train      Train multiple agents and sync training memory and docs',
     '    error    Record prevention rules instead of a success lesson',
     '    review   Review the latest host state without changing the route',
@@ -7474,5 +7524,73 @@ function handleBrainImport(workspace, flags, positional) {
 
   if (!importResult.readyToMerge && !importResult.error) {
     console.log('No new entries to import.');
+  }
+}
+
+function handleBrainExport(workspace, flags, positional) {
+  const options = {
+    scope: flags.scope || null,
+    tag: flags.tag || null,
+    quality: flags.quality || null,
+    domain: flags.domain || null,
+    search: positional.length > 1 ? positional.slice(1).join(' ') : (flags.search || null),
+    output: flags.output || null,
+  };
+
+  const result = runBrainExport(options, workspace);
+  const rendered = renderBrainExport(result);
+  console.log(rendered);
+
+  if (flags.output && result.outputPath) {
+    const writeResult = writeBrainExport(result);
+    if (writeResult.error) {
+      console.error(writeResult.error);
+      process.exit(1);
+    }
+  }
+}
+
+function handleLuauPerfProfile(workspace, flags, positional) {
+  const filePath = positional[0];
+  if (!filePath) {
+    console.error('Usage: agent-system luau-perf-profile <file-path>');
+    process.exit(1);
+  }
+
+  const result = runLuauPerfProfile(filePath);
+  const rendered = renderLuauPerfProfile(result);
+  console.log(rendered);
+
+  if (result.verdict === 'POOR' || result.verdict === 'BELOW_AVG') {
+    process.exit(1);
+  }
+}
+
+function handleLuauDeadCode(workspace, flags, positional) {
+  const filePath = positional[0];
+  if (!filePath) {
+    console.error('Usage: agent-system luau-dead-code <file-path>');
+    process.exit(1);
+  }
+
+  const result = runLuauDeadCode(filePath);
+  const rendered = renderLuauDeadCode(result);
+  console.log(rendered);
+}
+
+function handleLuauDiffReport(workspace, flags, positional) {
+  const oldPath = positional[0];
+  const newPath = positional[1];
+  if (!oldPath || !newPath) {
+    console.error('Usage: agent-system luau-diff-report <old-file> <new-file>');
+    process.exit(1);
+  }
+
+  const result = runLuauDiffReport(oldPath, newPath);
+  const rendered = renderLuauDiffReport(result);
+  console.log(rendered);
+
+  if (result.verdict === 'REGRESSION') {
+    process.exit(1);
   }
 }
