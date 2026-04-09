@@ -27,6 +27,7 @@ Superpowers decides how to work: brainstorming, planning, debugging, or test-dri
 - Claude Code
 - Codex
 - Qwen Code
+- OpenCode
 
 ## Installation
 
@@ -68,9 +69,9 @@ Short form:
 qwen extensions install Nanana291/agent-system
 ```
 
-## V0.6.4.3 scope
+## V0.6.4.4 scope
 
-This release keeps `/upgrade` as a learning-aware pipeline, but closes the release-critical proof gap with executable enforcement. `upgrade preview`, `upgrade learn`, `upgrade apply`, `upgrade sync`, `upgrade report`, `upgrade status`, `upgrade replay`, and the new `delivery-check` gate now make the upgrade trail and delivery closure verifiable instead of markdown-only. The CLI surface also exposes `npm run luau-train` and `npm run upgrade-status` as direct aliases for the common Luau training and upgrade status paths.
+This release keeps `/upgrade` as a learning-aware pipeline, but closes the release-critical proof gap with executable enforcement. `upgrade preview`, `upgrade learn`, `upgrade apply`, `upgrade sync`, `upgrade report`, `upgrade status`, `upgrade replay`, and the new `delivery-check` gate now make the upgrade trail and delivery closure verifiable instead of markdown-only. The CLI surface also exposes `npm run luau-train` and `npm run upgrade-status` as direct aliases for the common Luau training and upgrade status paths. OpenCode gets a native local tool surface through `.opencode/tools/agent_system.ts`.
 
 The upgrade pipeline is still per-agent. It learns from the active target, dedupes lessons against prior upgrade history, writes a durable upgrade snapshot in `docs/upgrade/current.json`, appends `docs/upgrade/history.jsonl`, and syncs the learned result into the profile doc plus host memory. Upgrade sessions stay materialized under `docs/upgrade/sessions/` so replay can compare the current docs against the last known good snapshot.
 

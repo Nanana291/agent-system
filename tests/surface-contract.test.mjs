@@ -15,12 +15,17 @@ function runAgent(args, cwd = repoRoot) {
   });
 }
 
-test('release surface includes executable enforcement wrappers, aliases, and version 0.6.4.3', () => {
+test('release surface includes executable enforcement wrappers, aliases, and version 0.6.4.4', () => {
   const pkg = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
+  const manifest = JSON.parse(readFileSync(path.join(repoRoot, 'agent-system.json'), 'utf8'));
+  const profile = JSON.parse(readFileSync(path.join(repoRoot, 'profiles', 'imphub', 'profile.json'), 'utf8'));
 
-  assert.equal(pkg.version, '0.6.4.3');
+  assert.equal(pkg.version, '0.6.4.4');
   assert.equal(pkg.scripts['luau-train'], 'node ./bin/agent-system.mjs luau-train');
   assert.equal(pkg.scripts['upgrade-status'], 'node ./bin/agent-system.mjs upgrade status');
+  assert.equal(manifest.version, '0.6.4.4');
+  assert.deepEqual(manifest.supportedHosts, ['claude-code', 'codex', 'qwen-code', 'opencode']);
+  assert.deepEqual(profile.supportedHosts, ['claude', 'codex', 'qwen', 'opencode']);
   assert.equal(existsSync(path.join(repoRoot, 'bin', 'delivery-check.mjs')), true);
   assert.equal(existsSync(path.join(repoRoot, 'bin', 'upgrade-apply.mjs')), true);
   assert.equal(existsSync(path.join(repoRoot, 'bin', 'upgrade-sync.mjs')), true);
@@ -28,11 +33,14 @@ test('release surface includes executable enforcement wrappers, aliases, and ver
   assert.equal(existsSync(path.join(repoRoot, 'bin', 'brain-query.mjs')), true);
   assert.equal(existsSync(path.join(repoRoot, 'bin', 'brain-dedupe.mjs')), true);
   assert.equal(existsSync(path.join(repoRoot, 'bin', 'backup-validate.mjs')), true);
+  assert.equal(existsSync(path.join(repoRoot, '.opencode', 'package.json')), true);
+  assert.equal(existsSync(path.join(repoRoot, '.opencode', 'tools', 'agent_system.ts')), true);
   assert.equal(existsSync(path.join(repoRoot, 'commands', 'upgrade-apply.md')), true);
   assert.equal(existsSync(path.join(repoRoot, 'commands', 'upgrade-sync.md')), true);
   assert.equal(existsSync(path.join(repoRoot, 'commands', 'upgrade-replay.md')), true);
   assert.equal(existsSync(path.join(repoRoot, 'commands', 'brain-dedupe.md')), true);
   assert.equal(existsSync(path.join(repoRoot, 'commands', 'delivery-check.md')), true);
+  assert.equal(existsSync(path.join(repoRoot, 'adapters', 'opencode', 'README.md')), true);
   assert.equal(existsSync(path.join(repoRoot, 'docs', 'upgrade', 'README.md')), true);
   assert.equal(existsSync(path.join(repoRoot, 'docs', 'upgrade', 'current.json')), true);
   assert.equal(existsSync(path.join(repoRoot, 'docs', 'upgrade', 'history.jsonl')), true);
