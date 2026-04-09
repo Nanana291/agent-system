@@ -29,6 +29,10 @@ import { runBrainExport, writeBrainExport, renderBrainExport } from '../lib/brai
 import { runLuauPerfProfile, renderLuauPerfProfile } from '../lib/luau-perf-profile.mjs';
 import { runLuauDeadCode, renderLuauDeadCode } from '../lib/luau-dead-code.mjs';
 import { runLuauDiffReport, renderLuauDiffReport } from '../lib/luau-diff-report.mjs';
+import { runLuauDocGen, renderDocGenMarkdown } from '../lib/luau-docgen.mjs';
+import { runBrainStats, renderBrainStats } from '../lib/brain-stats.mjs';
+import { runLuauRefactor, renderLuauRefactor } from '../lib/luau-refactor.mjs';
+import { runDashboard, renderDashboard } from '../lib/dashboard.mjs';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -127,6 +131,18 @@ async function main() {
       return;
     case 'luau-diff-report':
       handleLuauDiffReport(workspace, flags, positional);
+      return;
+    case 'luau-docgen':
+      handleLuauDocGen(workspace, flags, positional);
+      return;
+    case 'brain-stats':
+      handleBrainStats(workspace, flags, positional);
+      return;
+    case 'luau-refactor':
+      handleLuauRefactor(workspace, flags, positional);
+      return;
+    case 'dashboard':
+      handleDashboard(workspace, flags, positional);
       return;
     case 'train':
       handleTrain(workspace, flags, positional);
@@ -393,6 +409,10 @@ function parseArgs(argv) {
       i += 0;
       continue;
     }
+    if (arg.startsWith('--no-')) {
+      flags[arg] = true;
+      continue;
+    }
     if (arg === '--classification') {
       flags.classification = argv[i + 1];
       i += 1;
@@ -521,6 +541,11 @@ function printHelp() {
     '    --quality <q>    Filter by quality (high/medium/low)',
     '    --domain <d>     Filter by domain',
     '    --output <file>  Write to file instead of preview',
+    '  brain-stats  Show brain knowledge base statistics (scope, quality, tags, age, health)',
+    '  luau-docgen  Auto-generate markdown documentation for a Luau script',
+    '    --output <file.md>  Write documentation to file (default: stdout)',
+    '  luau-refactor  Safe automatic refactoring (pcall wrap, cache, dead code)',
+    '  dashboard    System health panel (brain, memory, training, upgrade, metrics)',
     '  train      Train multiple agents and sync training memory and docs',
     '    error    Record prevention rules instead of a success lesson',
     '    review   Review the latest host state without changing the route',
@@ -7593,4 +7618,55 @@ function handleLuauDiffReport(workspace, flags, positional) {
   if (result.verdict === 'REGRESSION') {
     process.exit(1);
   }
+}
+
+function handleLuauDocGen(workspace, flags, positional) {
+  const filePath = positional[0];
+  if (!filePath) {
+    console.error('Usage: agent-system luau-docgen <file.lua> [--output <file.md>]');
+    process.exit(1);
+  }
+
+  const doc = runLuauDocGen(filePath);
+  const markdown = renderDocGenMarkdown(doc);
+
+  if (flags.output) {
+    const outPath = path.resolve(flags.output);
+    fs.writeFileSync(outPath, markdown + '\n', 'utf8');
+    console.log(`Documentation written to ${outPath}`);
+  } else {
+    console.log(markdown);
+  }
+}
+
+function handleBrainStats(workspace, flags, positional) {
+  const result = runBrainStats(workspace);
+  const rendered = renderBrainStats(result);
+  console.log(rendered);
+}
+
+function handleLuauRefactor(workspace, flags, positional) {
+  const filePath = positional[0];
+  if (!filePath) {
+    console.error('Usage: agent-system luau-refactor <file.lua> [--dry-run]');
+    process.exit(1);
+  }
+
+  const fixes = {
+    cacheGetService: !flags['no-cache-getservice'],
+    wrapPcall: !flags['no-wrap-pcall'],
+    cacheFindFirstChild: !flags['no-cache-ffc'],
+    removeDeadFunctions: !flags['no-dead-code'],
+    hoistTableCreation: !flags['no-hoist-table'],
+  };
+
+  const result = runLuauRefactor(filePath, fixes);
+  const rendered = renderLuauRefactor(result);
+  console.log(rendered);
+}
+
+function handleDashboard(workspace, flags, positional) {
+  const result = runDashboard(workspace);
+  const rendered = renderDashboard(result);
+  console.log(rendered);
 }

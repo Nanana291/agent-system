@@ -114,6 +114,15 @@ This release adds 4 more commands for performance profiling, dead code detection
 - **`brain-export`** — Portable brain export with filters (scope, tag, quality, domain, search) and JSON output. Complements `brain-import` for round-trip knowledge sharing
 - **`luau-diff-report`** — Semantic diff between two script versions: function adds/removes/size changes, remote diffs, feature parity, UI framework changes, loop count deltas. Verdicts: REGRESSION / EXPANSION / RESTRUCTURE / INCREMENTAL
 
+## V0.7.0.0 — Documentation & Dashboard
+
+This release adds 4 commands for auto-documentation, brain analytics, safe refactoring, and system health monitoring:
+
+- **`luau-docgen`** — Auto-generate markdown documentation for a Luau script. Extracts features table, remote directory, function API, UI structure, lifecycle patterns, config, and state variables. Output as structured markdown with `--output <file.md>` support
+- **`brain-stats`** — Knowledge base analytics: entries by scope/quality/domain, tag frequency, game coverage, age analysis, tag/evidence coverage, activity history, health score 0-100
+- **`luau-refactor`** — Safe automatic refactoring: wraps unprotected FireServer in pcallRef, reports GetService caching opportunities, reports FindFirstChild-in-loop cache opportunities, identifies dead functions. Creates `.bak` backup before modifying
+- **`dashboard`** — System health panel showing manifest, brain, memory, training, upgrade, change, metrics, and profile status in a single view with overall health score
+
 ## Memory layer
 
 The repo now treats memory as flat and host-specific:
