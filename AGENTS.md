@@ -12,9 +12,9 @@
 
 The system includes a Luau-specific extension layer for script development, migration, and quality gating:
 
-- **Skills:** `luau-pattern-lib` (reusable patterns), `luau-safety-check` (pre-modification checklist), `brain-auto-tag` (automatic tag suggestion)
-- **Agents:** `luau-migrator` (V2 migrations), `architecture-reviewer`, `qa-inspector`
-- **Commands:** `luau-compare-matrix` (feature parity + risk delta), `luau-feature-diff` (lost/degraded feature detection), `luau-regression-gate` (quality threshold blocking)
+- **Skills:** `luau-pattern-lib` (reusable patterns), `luau-safety-check` (pre-modification checklist), `brain-auto-tag` (automatic tag suggestion), `luau-test-strategy` (verification without runtime), `luau-executor-compat` (cross-executor compatibility)
+- **Agents:** `luau-migrator` (V2 migrations), `luau-reverser` (obfuscation analysis, backdoor detection), `architecture-reviewer`, `qa-inspector`
+- **Commands:** `luau-compare-matrix` (feature parity + risk delta), `luau-feature-diff` (lost/degraded feature detection), `luau-regression-gate` (quality threshold blocking with executable implementation), `luau-remote-map` (remote call mapping + handler coverage), `luau-flow` (data flow analysis), `luau-changelog` (release notes from diff), `luau-template` (scaffold generation)
 - **Existing Luau commands:** `luau-quick`, `luau-explain`, `luau-diagnose`, `luau-repair`, `luau-gate`, `luau-train`, `luau-eval`
 
 ## Core model
@@ -92,6 +92,6 @@ Durable rules should be written where they belong first, then kept inside the ho
 - `memory/change/<host>.md` stores auto-captured lessons from change gates before promotion into that same host's memory file.
 - `memory learn` auto-promotes repeated change lessons into the active host's memory file during a successful gate.
 
-## V0.6.4.4 intent
+## V0.6.6.0 intent
 
-This release keeps the structured second brain between the model and the agents, but moves the release-critical proof paths into executable checks so upgrade replay, delivery closure, metrics, and brain hygiene are no longer only markdown contracts. `brain add`, `brain query`, `brain explain`, `brain promote`, `brain demote`, `brain prune`, `brain snapshot`, `brain restore`, `brain diff`, and `brain sync` still capture, explain, and recover durable knowledge automatically from change, train, eval, memory, upgrade, and recovery flows. The surface also exposes `luau-train`, `upgrade status`, `metrics`, `metrics trend`, and `metrics compare` as stable package aliases for the common Luau, upgrade, and metrics paths.
+This release expands the Luau extension layer with 8 new components: executable `luau-regression-gate` (static analysis of risk score, remote safety, loop safety, character lifecycle, library loading, feature parity, thread management, local pressure, and original integrity), `luau-remote-map` (remote call mapping with handler coverage and safety analysis), `luau-flow` (data flow analysis between variables, functions, remotes, and UI), `luau-test-strategy` (verification without runtime — structural tests, safety invariants, pattern tests), `luau-reverser` agent (obfuscation analysis, backdoor detection, logic reconstruction), `luau-changelog` (release notes from baseline diff with brain entry links), `luau-executor-compat` (cross-executor compatibility checking with API matrix), and `luau-template` (scaffold generation with pre-wired safety patterns). The `luau-regression-gate` command now has a working `.mjs` implementation that performs static analysis on Luau source files.

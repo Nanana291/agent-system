@@ -16,6 +16,7 @@ import {
   renderMetricsTrend,
   writeMetricsSnapshot,
 } from '../lib/metrics.mjs';
+import { runLuauRegressionGate, renderLuauRegressionGate } from '../lib/luau-regression-gate.mjs';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -75,6 +76,9 @@ async function main() {
       return;
     case 'luau-gate':
       handleLuauGate(workspace, flags, positional);
+      return;
+    case 'luau-regression-gate':
+      handleLuauRegressionGate(workspace, flags, positional);
       return;
     case 'train':
       handleTrain(workspace, flags, positional);
@@ -7295,3 +7299,24 @@ const requiredGateFields = [
   'Open risks',
   'Blocked / Ready',
 ];
+
+// ──────────────────────────────────────────────
+// Luau Regression Gate Handler
+// ──────────────────────────────────────────────
+
+function handleLuauRegressionGate(workspace, flags, positional) {
+  const filePath = positional[0];
+  if (!filePath) {
+    console.error('Usage: agent-system luau-regression-gate <file-path> [--baseline <path>]');
+    process.exit(1);
+  }
+
+  const baselinePath = flags.baseline || null;
+  const result = runLuauRegressionGate(filePath, baselinePath, workspace);
+  const rendered = renderLuauRegressionGate(result);
+  console.log(rendered);
+
+  if (result.verdict === 'BLOCKED') {
+    process.exit(1);
+  }
+}
