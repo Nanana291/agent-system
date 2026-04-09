@@ -1,14 +1,14 @@
 {
   "kind": "agent-system-metrics",
   "version": 1,
-  "source": "train",
-  "generatedAt": "2026-04-09T23:32:43.673Z",
+  "source": "upgrade",
+  "generatedAt": "2026-04-09T23:32:33.770Z",
   "activeProfile": "imphub",
   "activeHost": "qwen",
   "totals": {
-    "files": 198,
-    "lines": 31958,
-    "locals": 3421,
+    "files": 191,
+    "lines": 29965,
+    "locals": 3407,
     "remotes": 5,
     "callbacks": 28,
     "flags": 237,
@@ -25,24 +25,18 @@
     "bySeverity": {}
   },
   "brain": {
-    "totalNotes": 5,
+    "totalNotes": 1,
     "tags": {
-      "recovery": 1,
-      "snapshot": 1,
-      "qwen": 4,
-      "upgrade": 3,
+      "upgrade": 1,
       "learn": 1,
-      "imphub": 3,
-      "claude": 3,
-      "codex": 3,
-      "opencode": 3,
-      "apply": 1,
-      "sync": 1,
-      "train": 1,
-      "general": 2
+      "imphub": 1,
+      "claude": 1,
+      "codex": 1,
+      "qwen": 1,
+      "opencode": 1
     }
   },
   "summaryPath": "docs/metrics/current.json",
-  "snapshotPath": "docs/metrics/snapshots/2026-04-09T23-32-43-673Z.json",
+  "snapshotPath": "docs/metrics/snapshots/2026-04-09T23-32-33-770Z.json",
   "historyPath": "docs/metrics/history.jsonl"
 }

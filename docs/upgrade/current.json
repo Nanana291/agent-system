@@ -1,13 +1,13 @@
 {
   "kind": "agent-system-upgrade",
   "version": 1,
-  "mode": "idle",
-  "outcome": "idle",
+  "mode": "sync",
+  "outcome": "synced",
   "activeProfile": "imphub",
   "activeHost": "qwen",
-  "generatedAt": "",
-  "sessionId": "",
-  "targetPath": "",
+  "generatedAt": "2026-04-09T23:32:33.022Z",
+  "sessionId": "2026-04-09T23-32-33-022Z-qwen-cycle",
+  "targetPath": "/storage/emulated/0/Download/work/agent-system/AGENTS.md",
   "replaySource": "",
   "scope": {
     "docs": true,
@@ -15,17 +15,339 @@
     "profileMemory": true,
     "hostMemory": true
   },
-  "sections": [],
-  "agents": [],
+  "sections": [
+    {
+      "heading": "Scriptmaster (logic)",
+      "body": [
+        "Task flow, runtime behavior, remotes, selectors, and action dispatch."
+      ]
+    },
+    {
+      "heading": "Ui Designer (ui)",
+      "body": [
+        "LibSixtyTen layout, visible status text, section structure, and control grouping."
+      ]
+    },
+    {
+      "heading": "Feature Framer (framing)",
+      "body": [
+        "Parent-child meaning for new master-toggle groups."
+      ]
+    },
+    {
+      "heading": "Terminology Keeper (terminology)",
+      "body": [
+        "Visible labels, status wording, and cross-page naming consistency."
+      ]
+    },
+    {
+      "heading": "Executor Specialist (compat)",
+      "body": [
+        "Executor gating, unsupported-path detection, and platform compatibility."
+      ]
+    },
+    {
+      "heading": "Lifecycle Manager (lifecycle)",
+      "body": [
+        "Respawn, character rebinds, and long-lived connection ownership."
+      ]
+    },
+    {
+      "heading": "Update Steward (update)",
+      "body": [
+        "Existing-script update scope and preserve-list features."
+      ]
+    },
+    {
+      "heading": "Config Keeper (config)",
+      "body": [
+        "Persistence, migration, and autoload synchronization."
+      ]
+    },
+    {
+      "heading": "Drawing Artist (esp)",
+      "body": [
+        "Drawing API overlays and ESP rendering."
+      ]
+    },
+    {
+      "heading": "Optimizer (optimization)",
+      "body": [
+        "Performance, register pressure, memory, and connection cleanup."
+      ]
+    },
+    {
+      "heading": "Qa Inspector (regression-proof)",
+      "body": [
+        "Baseline comparison, regression matrices, and delivery gates."
+      ]
+    }
+  ],
+  "agents": [
+    {
+      "heading": "Scriptmaster (logic)",
+      "title": "Scriptmaster (logic)",
+      "key": "scriptmaster logic",
+      "lesson": "Keep selector, dispatcher, and recovery ownership explicit.",
+      "notes": [
+        "Keep selector, dispatcher, and recovery ownership explicit.",
+        "Preserve baseline and regression proof for existing-script updates.",
+        "Call out post-autoload runtime re-sync when derived state changes.",
+        "Host sync target: qwen."
+      ],
+      "evidence": "Task flow, runtime behavior, remotes, selectors, and action dispatch.",
+      "lessonKey": "scriptmaster logic keep selector dispatcher and recovery ownership explicit task flow runtime behavior remotes selectors and action dispatch",
+      "status": "new",
+      "confidence": 84,
+      "previousSession": "",
+      "hostTargets": [
+        "claude",
+        "codex",
+        "qwen",
+        "opencode"
+      ]
+    },
+    {
+      "heading": "Ui Designer (ui)",
+      "title": "Ui Designer (ui)",
+      "key": "ui designer ui",
+      "lesson": "Keep visible wording, ToolTip coverage, and gated visibility aligned.",
+      "notes": [
+        "Keep visible wording, ToolTip coverage, and gated visibility aligned.",
+        "Use status labels that match the user-facing intent first.",
+        "Document old -> new flag mappings when UI labels move.",
+        "Host sync target: qwen."
+      ],
+      "evidence": "LibSixtyTen layout, visible status text, section structure, and control grouping.",
+      "lessonKey": "ui designer ui keep visible wording tooltip coverage and gated visibility aligned libsixtyten layout visible status text section structure and control grouping",
+      "status": "new",
+      "confidence": 84,
+      "previousSession": "",
+      "hostTargets": [
+        "claude",
+        "codex",
+        "qwen",
+        "opencode"
+      ]
+    },
+    {
+      "heading": "Feature Framer (framing)",
+      "title": "Feature Framer (framing)",
+      "key": "feature framer framing",
+      "lesson": "Make child controls read like subordinate actions, modes, or fallbacks.",
+      "notes": [
+        "Make child controls read like subordinate actions, modes, or fallbacks.",
+        "Do not force separate product names for dependent controls.",
+        "Preserve the parent-child mental model in the visible wording.",
+        "Host sync target: qwen."
+      ],
+      "evidence": "Parent-child meaning for new master-toggle groups.",
+      "lessonKey": "feature framer framing make child controls read like subordinate actions modes or fallbacks parent child meaning for new master toggle groups",
+      "status": "new",
+      "confidence": 84,
+      "previousSession": "",
+      "hostTargets": [
+        "claude",
+        "codex",
+        "qwen",
+        "opencode"
+      ]
+    },
+    {
+      "heading": "Terminology Keeper (terminology)",
+      "title": "Terminology Keeper (terminology)",
+      "key": "terminology keeper terminology",
+      "lesson": "Keep visible names stable across pages for the same concept.",
+      "notes": [
+        "Keep visible names stable across pages for the same concept.",
+        "Reject GPT-like labels that sound generic or inflated.",
+        "Only introduce synonyms when they improve comprehension.",
+        "Host sync target: qwen."
+      ],
+      "evidence": "Visible labels, status wording, and cross-page naming consistency.",
+      "lessonKey": "terminology keeper terminology keep visible names stable across pages for the same concept visible labels status wording and cross page naming consistency",
+      "status": "new",
+      "confidence": 84,
+      "previousSession": "",
+      "hostTargets": [
+        "claude",
+        "codex",
+        "qwen",
+        "opencode"
+      ]
+    },
+    {
+      "heading": "Executor Specialist (compat)",
+      "title": "Executor Specialist (compat)",
+      "key": "executor specialist compat",
+      "lesson": "Fail closed on unsupported executor paths.",
+      "notes": [
+        "Fail closed on unsupported executor paths.",
+        "Keep compatibility gates and unsupported-path notes explicit.",
+        "Do not assume host-native features exist without proof.",
+        "Host sync target: qwen."
+      ],
+      "evidence": "Executor gating, unsupported-path detection, and platform compatibility.",
+      "lessonKey": "executor specialist compat fail closed on unsupported executor paths executor gating unsupported path detection and platform compatibility",
+      "status": "new",
+      "confidence": 84,
+      "previousSession": "",
+      "hostTargets": [
+        "claude",
+        "codex",
+        "qwen",
+        "opencode"
+      ]
+    },
+    {
+      "heading": "Lifecycle Manager (lifecycle)",
+      "title": "Lifecycle Manager (lifecycle)",
+      "key": "lifecycle manager lifecycle",
+      "lesson": "Preserve rebinds, respawn paths, and loop ownership boundaries.",
+      "notes": [
+        "Preserve rebinds, respawn paths, and loop ownership boundaries.",
+        "Never leave long-lived state without an owner contract.",
+        "Keep recovery and attachment paths explicit.",
+        "Host sync target: qwen."
+      ],
+      "evidence": "Respawn, character rebinds, and long-lived connection ownership.",
+      "lessonKey": "lifecycle manager lifecycle preserve rebinds respawn paths and loop ownership boundaries respawn character rebinds and long lived connection ownership",
+      "status": "new",
+      "confidence": 84,
+      "previousSession": "",
+      "hostTargets": [
+        "claude",
+        "codex",
+        "qwen",
+        "opencode"
+      ]
+    },
+    {
+      "heading": "Update Steward (update)",
+      "title": "Update Steward (update)",
+      "key": "update steward update",
+      "lesson": "Preserve the allowed update scope and preserve-list features.",
+      "notes": [
+        "Preserve the allowed update scope and preserve-list features.",
+        "Keep additive changes inside the existing owner path first.",
+        "State the old -> new runtime map when ownership moves.",
+        "Host sync target: qwen."
+      ],
+      "evidence": "Existing-script update scope and preserve-list features.",
+      "lessonKey": "update steward update preserve the allowed update scope and preserve list features existing script update scope and preserve list features",
+      "status": "new",
+      "confidence": 84,
+      "previousSession": "",
+      "hostTargets": [
+        "claude",
+        "codex",
+        "qwen",
+        "opencode"
+      ]
+    },
+    {
+      "heading": "Config Keeper (config)",
+      "title": "Config Keeper (config)",
+      "key": "config keeper config",
+      "lesson": "Keep ownership explicit.",
+      "notes": [
+        "Keep ownership explicit.",
+        "Capture the durable lesson in the right host memory.",
+        "Prefer additive, reversible upgrades over broad rewrites.",
+        "Host sync target: qwen."
+      ],
+      "evidence": "Persistence, migration, and autoload synchronization.",
+      "lessonKey": "config keeper config keep ownership explicit persistence migration and autoload synchronization",
+      "status": "new",
+      "confidence": 84,
+      "previousSession": "",
+      "hostTargets": [
+        "claude",
+        "codex",
+        "qwen",
+        "opencode"
+      ]
+    },
+    {
+      "heading": "Drawing Artist (esp)",
+      "title": "Drawing Artist (esp)",
+      "key": "drawing artist esp",
+      "lesson": "Keep ownership explicit.",
+      "notes": [
+        "Keep ownership explicit.",
+        "Capture the durable lesson in the right host memory.",
+        "Prefer additive, reversible upgrades over broad rewrites.",
+        "Host sync target: qwen."
+      ],
+      "evidence": "Drawing API overlays and ESP rendering.",
+      "lessonKey": "drawing artist esp keep ownership explicit drawing api overlays and esp rendering",
+      "status": "new",
+      "confidence": 84,
+      "previousSession": "",
+      "hostTargets": [
+        "claude",
+        "codex",
+        "qwen",
+        "opencode"
+      ]
+    },
+    {
+      "heading": "Optimizer (optimization)",
+      "title": "Optimizer (optimization)",
+      "key": "optimizer optimization",
+      "lesson": "Keep register pressure, memory churn, and connection cleanup in view.",
+      "notes": [
+        "Keep register pressure, memory churn, and connection cleanup in view.",
+        "Avoid decorative helper layers that do not reduce risk or cost.",
+        "State ownership must remain explicit for long-lived loops.",
+        "Host sync target: qwen."
+      ],
+      "evidence": "Performance, register pressure, memory, and connection cleanup.",
+      "lessonKey": "optimizer optimization keep register pressure memory churn and connection cleanup in view performance register pressure memory and connection cleanup",
+      "status": "new",
+      "confidence": 84,
+      "previousSession": "",
+      "hostTargets": [
+        "claude",
+        "codex",
+        "qwen",
+        "opencode"
+      ]
+    },
+    {
+      "heading": "Qa Inspector (regression-proof)",
+      "title": "Qa Inspector (regression-proof)",
+      "key": "qa inspector regression proof",
+      "lesson": "Anchor delivery on a baseline and a clear regression matrix.",
+      "notes": [
+        "Anchor delivery on a baseline and a clear regression matrix.",
+        "Call out touched vs untouched paths before delivery closes.",
+        "Block on missing proof instead of soft-approving the change.",
+        "Host sync target: qwen."
+      ],
+      "evidence": "Baseline comparison, regression matrices, and delivery gates.",
+      "lessonKey": "qa inspector regression proof anchor delivery on a baseline and a clear regression matrix baseline comparison regression matrices and delivery gates",
+      "status": "new",
+      "confidence": 84,
+      "previousSession": "",
+      "hostTargets": [
+        "claude",
+        "codex",
+        "qwen",
+        "opencode"
+      ]
+    }
+  ],
   "hosts": [
     "claude",
     "codex",
-    "qwen"
+    "qwen",
+    "opencode"
   ],
-  "learned": 0,
+  "learned": 11,
   "reinforced": 0,
   "blocked": 0,
-  "summaryPath": "",
+  "summaryPath": "docs/upgrade/sessions/2026-04-09T23-32-33-022Z-qwen-cycle.md",
   "currentDocPath": "docs/upgrade/current.json",
   "historyPath": "docs/upgrade/history.jsonl"
 }

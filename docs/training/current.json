@@ -1,14 +1,77 @@
 {
   "kind": "agent-system-training",
   "version": 1,
-  "mode": "idle",
-  "outcome": "idle",
+  "mode": "success",
+  "outcome": "applied",
   "activeProfile": "imphub",
   "activeHost": "qwen",
-  "sessionId": "",
-  "generatedAt": "",
-  "summaryPath": "",
-  "agents": [],
-  "lesson": ""
+  "focus": "general",
+  "language": "general",
+  "sessionId": "2026-04-09T23-32-43-161Z-qwen-success",
+  "generatedAt": "2026-04-09T23:32:43.161Z",
+  "summaryPath": "docs/training/2026-04-09T23-32-43-161Z-qwen-success.md",
+  "agents": [
+    {
+      "title": "Scriptmaster",
+      "role": "scriptmaster",
+      "domain": "logic"
+    },
+    {
+      "title": "Ui Designer",
+      "role": "ui-designer",
+      "domain": "ui"
+    },
+    {
+      "title": "Feature Framer",
+      "role": "feature-framer",
+      "domain": "framing"
+    },
+    {
+      "title": "Terminology Keeper",
+      "role": "terminology-keeper",
+      "domain": "terminology"
+    },
+    {
+      "title": "Executor Specialist",
+      "role": "executor-specialist",
+      "domain": "compat"
+    },
+    {
+      "title": "Lifecycle Manager",
+      "role": "lifecycle-manager",
+      "domain": "lifecycle"
+    },
+    {
+      "title": "Update Steward",
+      "role": "update-steward",
+      "domain": "update"
+    },
+    {
+      "title": "Config Keeper",
+      "role": "config-keeper",
+      "domain": "config"
+    },
+    {
+      "title": "Drawing Artist",
+      "role": "drawing-artist",
+      "domain": "esp"
+    },
+    {
+      "title": "Optimizer",
+      "role": "optimizer",
+      "domain": "optimization"
+    },
+    {
+      "title": "Qa Inspector",
+      "role": "qa-inspector",
+      "domain": "regression-proof"
+    },
+    {
+      "title": "Architecture Reviewer",
+      "role": "architecture-reviewer",
+      "domain": "review"
+    }
+  ],
+  "lesson": "Training lesson: keep Scriptmaster, Ui Designer, Feature Framer, Terminology Keeper aligned with the active profile, preserve the owned domains, and mirror durable notes into qwen memory. Source mode: idle.",
+  "luauLesson": ""
 }
-
