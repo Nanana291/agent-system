@@ -95,6 +95,16 @@ Learning recovery still exists: `memory snapshot`, `memory restore`, `memory dif
 
 `train` remains the continuous improvement engine. Successful cycles still auto-promote durable lessons, refresh the host learning pack, write a continuous-training snapshot in `docs/training/`, and leave a structured brain trace so the same lesson can be retrieved, explained, or promoted later without re-deriving it from raw session logs.
 
+## V0.6.8.0 — New Analysis Tools
+
+This release adds 5 new commands for Luau script analysis and brain management:
+
+- **`luau-inspect`** — Structured script analysis: features, remotes, UI framework, loops, lifecycle, config, and hotspots
+- **`luau-verify-features`** — Feature parity verification: proves all baseline features survive in V2 migrations with logic path validation
+- **`luau-pcall-audit`** — Remote safety audit: scans all `FireServer`/`InvokeServer` calls and flags unprotected ones with risk scoring
+- **`luau-ui-map`** — UI hierarchy extraction: outputs tab → section → control tree with event wiring summary
+- **`brain-import`** — External brain import: loads JSON entries with deduplication, normalization, and optional merge
+
 ## Memory layer
 
 The repo now treats memory as flat and host-specific:

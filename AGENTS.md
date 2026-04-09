@@ -14,7 +14,7 @@ The system includes a Luau-specific extension layer for script development, migr
 
 - **Skills:** `luau-pattern-lib` (reusable patterns), `luau-safety-check` (pre-modification checklist), `brain-auto-tag` (automatic tag suggestion), `luau-test-strategy` (verification without runtime), `luau-executor-compat` (cross-executor compatibility)
 - **Agents:** `luau-migrator` (V2 migrations), `luau-reverser` (obfuscation analysis, backdoor detection), `architecture-reviewer`, `qa-inspector`
-- **Commands:** `luau-compare-matrix` (feature parity + risk delta), `luau-feature-diff` (lost/degraded feature detection), `luau-regression-gate` (quality threshold blocking with executable implementation), `luau-remote-map` (remote call mapping + handler coverage), `luau-flow` (data flow analysis), `luau-changelog` (release notes from diff), `luau-template` (scaffold generation)
+- **Commands:** `luau-compare-matrix` (feature parity + risk delta), `luau-feature-diff` (lost/degraded feature detection), `luau-regression-gate` (quality threshold blocking with executable implementation), `luau-remote-map` (remote call mapping + handler coverage), `luau-flow` (data flow analysis), `luau-changelog` (release notes from diff), `luau-template` (scaffold generation), `luau-inspect` (structured script analysis), `luau-verify-features` (feature parity checker), `luau-pcall-audit` (remote safety scan), `luau-ui-map` (UI hierarchy extractor)
 - **Existing Luau commands:** `luau-quick`, `luau-explain`, `luau-diagnose`, `luau-repair`, `luau-gate`, `luau-train`, `luau-eval`
 
 ## Core model

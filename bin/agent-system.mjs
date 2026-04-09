@@ -20,6 +20,11 @@ import { runLuauRegressionGate, renderLuauRegressionGate } from '../lib/luau-reg
 import { runLuauRemoteMap, renderLuauRemoteMap } from '../lib/luau-remote-map.mjs';
 import { runLuauSecurityScan, renderLuauSecurityScan } from '../lib/luau-security-scan.mjs';
 import { runLuauComplexity, renderLuauComplexity } from '../lib/luau-complexity.mjs';
+import { runLuauInspect, renderLuauInspect } from '../lib/luau-inspect.mjs';
+import { runLuauVerifyFeatures, renderLuauVerifyFeatures } from '../lib/luau-verify-features.mjs';
+import { runLuauPcallAudit, renderLuauPcallAudit } from '../lib/luau-pcall-audit.mjs';
+import { runLuauUIMap, renderLuauUIMap } from '../lib/luau-ui-map.mjs';
+import { runBrainImport, mergeBrainImport, renderBrainImport, renderBrainMerge } from '../lib/brain-import.mjs';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -91,6 +96,21 @@ async function main() {
       return;
     case 'luau-complexity':
       handleLuauComplexity(workspace, flags, positional);
+      return;
+    case 'luau-inspect':
+      handleLuauInspect(workspace, flags, positional);
+      return;
+    case 'luau-verify-features':
+      handleLuauVerifyFeatures(workspace, flags, positional);
+      return;
+    case 'luau-pcall-audit':
+      handleLuauPcallAudit(workspace, flags, positional);
+      return;
+    case 'luau-ui-map':
+      handleLuauUIMap(workspace, flags, positional);
+      return;
+    case 'brain-import':
+      handleBrainImport(workspace, flags, positional);
       return;
     case 'train':
       handleTrain(workspace, flags, positional);
@@ -445,6 +465,12 @@ function printHelp() {
     '  luau-diagnose Diagnose Luau-specific failure patterns',
     '  luau-repair Apply an automatic multi-file Luau repair',
     '  luau-gate  Validate a Luau repair snapshot',
+    '  luau-inspect Analyze a Luau script and output structured summary',
+    '  luau-verify-features Verify feature parity between source and baseline',
+    '  luau-pcall-audit Audit all remote calls for pcall safety',
+    '  luau-ui-map Extract UI hierarchy and event wiring',
+    '  brain-import Import brain entries from external JSON files',
+    '    --merge  Merge new entries into the current brain',
     '  train      Train multiple agents and sync training memory and docs',
     '    error    Record prevention rules instead of a success lesson',
     '    review   Review the latest host state without changing the route',
@@ -7371,4 +7397,82 @@ function handleLuauComplexity(workspace, flags, positional) {
   const result = runLuauComplexity(filePath);
   const rendered = renderLuauComplexity(result);
   console.log(rendered);
+}
+
+function handleLuauInspect(workspace, flags, positional) {
+  const filePath = positional[0];
+  if (!filePath) {
+    console.error('Usage: agent-system luau-inspect <file-path>');
+    process.exit(1);
+  }
+
+  const result = runLuauInspect(filePath);
+  const rendered = renderLuauInspect(result);
+  console.log(rendered);
+}
+
+function handleLuauVerifyFeatures(workspace, flags, positional) {
+  const sourcePath = positional[0];
+  if (!sourcePath) {
+    console.error('Usage: agent-system luau-verify-features <source-path> [--baseline <path>]');
+    process.exit(1);
+  }
+
+  const baselinePath = flags.baseline || null;
+  const result = runLuauVerifyFeatures(sourcePath, baselinePath);
+  const rendered = renderLuauVerifyFeatures(result);
+  console.log(rendered);
+
+  if (result.verification?.verdict === 'FAIL') {
+    process.exit(1);
+  }
+}
+
+function handleLuauPcallAudit(workspace, flags, positional) {
+  const filePath = positional[0];
+  if (!filePath) {
+    console.error('Usage: agent-system luau-pcall-audit <file-path>');
+    process.exit(1);
+  }
+
+  const result = runLuauPcallAudit(filePath);
+  const rendered = renderLuauPcallAudit(result);
+  console.log(rendered);
+
+  if (result.verdict === 'CRITICAL' || result.verdict === 'HIGH') {
+    process.exit(1);
+  }
+}
+
+function handleLuauUIMap(workspace, flags, positional) {
+  const filePath = positional[0];
+  if (!filePath) {
+    console.error('Usage: agent-system luau-ui-map <file-path>');
+    process.exit(1);
+  }
+
+  const result = runLuauUIMap(filePath);
+  const rendered = renderLuauUIMap(result);
+  console.log(rendered);
+}
+
+function handleBrainImport(workspace, flags, positional) {
+  const filePath = positional[0];
+  if (!filePath) {
+    console.error('Usage: agent-system brain-import <file-path> [--merge]');
+    process.exit(1);
+  }
+
+  const importResult = runBrainImport(filePath, workspace);
+  const rendered = renderBrainImport(importResult);
+  console.log(rendered);
+
+  if (flags.merge && importResult.readyToMerge) {
+    const mergeResult = mergeBrainImport(importResult, workspace);
+    console.log(renderBrainMerge(mergeResult));
+  }
+
+  if (!importResult.readyToMerge && !importResult.error) {
+    console.log('No new entries to import.');
+  }
 }
