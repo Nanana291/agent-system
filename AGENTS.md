@@ -8,6 +8,15 @@
 - Agent System owns route selection, ownership, handoff contracts, artifact requirements, and delivery gates.
 - Profile packs own repo-specific rules.
 
+## Luau Extension
+
+The system includes a Luau-specific extension layer for script development, migration, and quality gating:
+
+- **Skills:** `luau-pattern-lib` (reusable patterns), `luau-safety-check` (pre-modification checklist), `brain-auto-tag` (automatic tag suggestion)
+- **Agents:** `luau-migrator` (V2 migrations), `architecture-reviewer`, `qa-inspector`
+- **Commands:** `luau-compare-matrix` (feature parity + risk delta), `luau-feature-diff` (lost/degraded feature detection), `luau-regression-gate` (quality threshold blocking)
+- **Existing Luau commands:** `luau-quick`, `luau-explain`, `luau-diagnose`, `luau-repair`, `luau-gate`, `luau-train`, `luau-eval`
+
 ## Core model
 
 - `agent-system.json` defines the machine-readable system contract.
