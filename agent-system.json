@@ -32,7 +32,8 @@
     "status": "status",
     "change": "change",
     "training": "docs/training",
-    "evals": "docs/evals"
+    "evals": "docs/evals",
+    "metrics": "docs/metrics"
   },
   "profileDiscovery": {
     "defaultProfile": "imphub",
@@ -110,6 +111,12 @@
     "history": "docs/evals/history.jsonl",
     "readme": "docs/evals/README.md",
     "schema": "docs/evals-schema.md"
+  },
+  "metrics": {
+    "current": "docs/metrics/current.json",
+    "history": "docs/metrics/history.jsonl",
+    "readme": "docs/metrics/README.md",
+    "snapshots": "docs/metrics/snapshots"
   },
   "backup": {
     "schema": "docs/backup-schema.md",

@@ -26,6 +26,14 @@ test('release surface includes executable enforcement wrappers, aliases, and ver
   assert.equal(manifest.version, '0.6.4.4');
   assert.deepEqual(manifest.supportedHosts, ['claude-code', 'codex', 'qwen-code', 'opencode']);
   assert.deepEqual(profile.supportedHosts, ['claude', 'codex', 'qwen', 'opencode']);
+  assert.equal(pkg.scripts.metrics, 'node ./bin/agent-system.mjs metrics');
+  assert.equal(pkg.scripts['metrics-trend'], 'node ./bin/agent-system.mjs metrics trend');
+  assert.equal(pkg.scripts['metrics-compare'], 'node ./bin/agent-system.mjs metrics compare');
+  assert.equal(manifest.paths.metrics, 'docs/metrics');
+  assert.equal(manifest.metrics.current, 'docs/metrics/current.json');
+  assert.equal(manifest.metrics.history, 'docs/metrics/history.jsonl');
+  assert.equal(manifest.metrics.readme, 'docs/metrics/README.md');
+  assert.equal(manifest.metrics.snapshots, 'docs/metrics/snapshots');
   assert.equal(existsSync(path.join(repoRoot, 'bin', 'delivery-check.mjs')), true);
   assert.equal(existsSync(path.join(repoRoot, 'bin', 'upgrade-apply.mjs')), true);
   assert.equal(existsSync(path.join(repoRoot, 'bin', 'upgrade-sync.mjs')), true);
@@ -33,6 +41,10 @@ test('release surface includes executable enforcement wrappers, aliases, and ver
   assert.equal(existsSync(path.join(repoRoot, 'bin', 'brain-query.mjs')), true);
   assert.equal(existsSync(path.join(repoRoot, 'bin', 'brain-dedupe.mjs')), true);
   assert.equal(existsSync(path.join(repoRoot, 'bin', 'backup-validate.mjs')), true);
+  assert.equal(existsSync(path.join(repoRoot, '.opencode', 'package.json')), true);
+  assert.equal(existsSync(path.join(repoRoot, 'commands', 'metrics.md')), true);
+  assert.equal(existsSync(path.join(repoRoot, 'commands', 'metrics-trend.md')), true);
+  assert.equal(existsSync(path.join(repoRoot, 'commands', 'metrics-compare.md')), true);
   assert.equal(existsSync(path.join(repoRoot, '.opencode', 'package.json')), true);
   assert.equal(existsSync(path.join(repoRoot, '.opencode', 'tools', 'agent_system.ts')), true);
   assert.equal(existsSync(path.join(repoRoot, 'commands', 'upgrade-apply.md')), true);
@@ -45,6 +57,10 @@ test('release surface includes executable enforcement wrappers, aliases, and ver
   assert.equal(existsSync(path.join(repoRoot, 'docs', 'upgrade', 'current.json')), true);
   assert.equal(existsSync(path.join(repoRoot, 'docs', 'upgrade', 'history.jsonl')), true);
   assert.equal(existsSync(path.join(repoRoot, 'docs', 'upgrade', 'sessions', 'README.md')), true);
+  assert.equal(existsSync(path.join(repoRoot, 'docs', 'metrics', 'README.md')), true);
+  assert.equal(existsSync(path.join(repoRoot, 'docs', 'metrics', 'current.json')), true);
+  assert.equal(existsSync(path.join(repoRoot, 'docs', 'metrics', 'history.jsonl')), true);
+  assert.equal(existsSync(path.join(repoRoot, 'docs', 'metrics', 'snapshots', 'bootstrap.json')), true);
 });
 
 test('delivery-check is ready on the repository root workspace', () => {

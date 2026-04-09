@@ -47,6 +47,8 @@ Durable rules should be written where they belong first, then kept inside the ho
 - The canonical human-facing format is `[AGENT] <name> | <action> | <elapsed>`.
 - `docs/brain/current.json`, `docs/brain/history.jsonl`, and `docs/brain/snapshots/` store the structured second brain and its recoverable snapshots.
 - `brain add`, `brain query`, `brain explain`, `brain promote`, `brain demote`, `brain prune`, `brain snapshot`, `brain restore`, `brain diff`, and `brain sync` manage the second brain layer.
+- `docs/metrics/current.json`, `docs/metrics/history.jsonl`, and `docs/metrics/snapshots/` store the materialized metrics trail and its immutable snapshots.
+- `metrics`, `metrics trend`, and `metrics compare` read the metrics trail, while `train` and `upgrade` append fresh snapshots after successful runs.
 - `backup` captures the full mutable workspace into one portable bundle.
 - `restore` writes a validated backup bundle back into the workspace and then runs post-restore validation.
 - `bundle validate`, `bundle diff`, and `bundle prune` inspect or clean backup bundles without touching live state.
@@ -83,4 +85,4 @@ Durable rules should be written where they belong first, then kept inside the ho
 
 ## V0.6.4.4 intent
 
-This release keeps the structured second brain between the model and the agents, but moves the release-critical proof paths into executable checks so upgrade replay, delivery closure, and brain hygiene are no longer only markdown contracts. `brain add`, `brain query`, `brain explain`, `brain promote`, `brain demote`, `brain prune`, `brain snapshot`, `brain restore`, `brain diff`, and `brain sync` still capture, explain, and recover durable knowledge automatically from change, train, eval, memory, upgrade, and recovery flows. The surface also exposes `luau-train` and `upgrade status` as stable package aliases for the common Luau and upgrade paths.
+This release keeps the structured second brain between the model and the agents, but moves the release-critical proof paths into executable checks so upgrade replay, delivery closure, metrics, and brain hygiene are no longer only markdown contracts. `brain add`, `brain query`, `brain explain`, `brain promote`, `brain demote`, `brain prune`, `brain snapshot`, `brain restore`, `brain diff`, and `brain sync` still capture, explain, and recover durable knowledge automatically from change, train, eval, memory, upgrade, and recovery flows. The surface also exposes `luau-train`, `upgrade status`, `metrics`, `metrics trend`, and `metrics compare` as stable package aliases for the common Luau, upgrade, and metrics paths.
