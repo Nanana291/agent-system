@@ -21,7 +21,8 @@
   "supportedHosts": [
     "claude",
     "codex",
-    "qwen"
+    "qwen",
+    "opencode"
   ],
   "orchestrationSkills": [
     "agent-routing",

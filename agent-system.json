@@ -1,19 +1,20 @@
 {
   "name": "agent-system",
-  "version": "0.6.4.3",
+  "version": "0.6.4.4",
   "schemaVersion": 1,
   "purpose": "Universal route, ownership, handoff, and delivery-gate scaffold that complements Superpowers.",
   "superpowersIntegration": {
     "mode": "complementary-process-layer",
     "divisionOfLabor": "Superpowers decides how to work; Agent System decides who owns what, what artifacts are required, and what proof closes delivery."
   },
-  "supportedHosts": ["claude-code", "codex", "qwen-code"],
+  "supportedHosts": ["claude-code", "codex", "qwen-code", "opencode"],
   "bootstrap": {
     "primaryDocs": ["README.md", "AGENTS.md"],
     "hostDocs": {
       "claude": "CLAUDE.md",
       "codex": ".codex/INSTALL.md",
-      "qwen": "QWEN.md"
+      "qwen": "QWEN.md",
+      "opencode": "OPENCODE.md"
     }
   },
   "paths": {
@@ -47,7 +48,8 @@
   "adapters": {
     "claude": "adapters/claude/README.md",
     "codex": "adapters/codex/README.md",
-    "qwen": "adapters/qwen/README.md"
+    "qwen": "adapters/qwen/README.md",
+    "opencode": "adapters/opencode/README.md"
   },
   "fallbackPolicy": {
     "missingHostAdapter": "Use the root docs and profile manifest directly.",

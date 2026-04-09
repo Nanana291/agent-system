@@ -26,7 +26,7 @@ The repo standardizes these outputs:
 
 ## Host compatibility
 
-Claude Code, Codex, and Qwen Code all read the same core contract. Each host has a thin adapter doc, but the source of truth stays in the manifest and profile files.
+Claude Code, Codex, Qwen Code, and OpenCode all read the same core contract. Each host has a thin adapter doc, but the source of truth stays in the manifest and profile files.
 
 ## Memory contract
 
@@ -81,6 +81,6 @@ Durable rules should be written where they belong first, then kept inside the ho
 - `memory/change/<host>.md` stores auto-captured lessons from change gates before promotion into that same host's memory file.
 - `memory learn` auto-promotes repeated change lessons into the active host's memory file during a successful gate.
 
-## V0.6.4.3 intent
+## V0.6.4.4 intent
 
 This release keeps the structured second brain between the model and the agents, but moves the release-critical proof paths into executable checks so upgrade replay, delivery closure, and brain hygiene are no longer only markdown contracts. `brain add`, `brain query`, `brain explain`, `brain promote`, `brain demote`, `brain prune`, `brain snapshot`, `brain restore`, `brain diff`, and `brain sync` still capture, explain, and recover durable knowledge automatically from change, train, eval, memory, upgrade, and recovery flows. The surface also exposes `luau-train` and `upgrade status` as stable package aliases for the common Luau and upgrade paths.
