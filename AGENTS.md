@@ -22,6 +22,7 @@ The system includes a Luau-specific extension layer for script development, migr
 - `agent-system.json` defines the machine-readable system contract.
 - `profiles/<profile>/profile.json` defines the active profile contract.
 - `profiles/<profile>/AGENTS.md` explains the profile in human terms.
+- Canonical workspace path for this checkout: `/storage/emulated/0/Download/work/agent-system`. Do not hardcode the older `/storage/emulated/0/Download/agent-system` path in launchers, examples, or generated commands.
 
 ## Artifact model
 
