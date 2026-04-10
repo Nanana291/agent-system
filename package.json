@@ -1,6 +1,6 @@
 {
   "name": "agent-system",
-  "version": "0.10.0.0",
+  "version": "0.10.1.0",
   "private": true,
   "type": "module",
   "description": "Agent-system CLI for validation, routing, sync, memory, and profile maintenance.",
@@ -8,6 +8,7 @@
     "agent-system": "./bin/agent-system.mjs"
   },
   "scripts": {
+    "test": "node tests/smoke.test.mjs",
     "validate": "node ./bin/agent-system.mjs validate",
     "route": "node ./bin/agent-system.mjs route",
     "explain": "node ./bin/agent-system.mjs explain",

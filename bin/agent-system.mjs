@@ -60,6 +60,15 @@ async function main() {
   const workspace = loadWorkspace(flags.profile, flags.host);
 
   switch (command) {
+    case 'version':
+      printVersion();
+      return;
+    case 'doctor':
+      handleDoctor(workspace, flags);
+      return;
+    case 'lock':
+      handleLock(workspace, flags, positional);
+      return;
     case 'validate':
       handleValidate(workspace);
       return;
@@ -1314,6 +1323,7 @@ function handleMemory(workspace, flags, positional) {
   }
 
   console.error(`Unknown memory action: ${action}`);
+  console.error('Valid actions: list, add, search, promote, prune, audit, stats, status, capture, review, compress, teach, gate, reflect, packs, learn, snapshot, restore, diff, rollback');
   process.exit(1);
 }
 
@@ -4757,6 +4767,7 @@ function handleBrain(workspace, flags, positional) {
     return;
   }
   console.error(`Unknown brain action: ${action}`);
+  console.error('Valid actions: add, query, explain, promote, demote, prune, dedupe, snapshot, restore, diff, sync, list, stats, export, import');
   process.exit(1);
 }
 
@@ -7929,5 +7940,186 @@ function handleLuauReport(workspace, flags, positional) {
     console.log(`Report written to ${outPath}`);
   } else {
     console.log(markdown);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NEW COMMANDS (v0.10.1.0 additions)
+// ═══════════════════════════════════════════════════════════════
+
+function printVersion() {
+  const pkgPath = path.join(scriptDir, '..', 'package.json');
+  const pkg = fs.existsSync(pkgPath) ? JSON.parse(fs.readFileSync(pkgPath, 'utf8')) : {};
+  console.log(`agent-system v${pkg.version || 'unknown'}`);
+  console.log(`Node ${process.version} on ${process.platform}-${process.arch}`);
+}
+
+function handleDoctor(workspace, flags) {
+  const issues = [];
+  const ok = [];
+
+  // 1. Node version
+  const nodeMajor = parseInt(process.versions.node, 10);
+  if (nodeMajor >= 18) {
+    ok.push(`Node.js ${process.version}`);
+  } else {
+    issues.push(`Node.js ${process.version} — recommend 18+`);
+  }
+
+  // 2. Lib imports — check all lib/ files exist
+  const libDir = path.join(scriptDir, '..', 'lib');
+  const expectedLibs = [
+    'artifacts.mjs', 'brain-diff.mjs', 'brain-export.mjs', 'brain-hygiene.mjs',
+    'brain-import.mjs', 'brain-stats.mjs', 'dashboard.mjs',
+    'luau-baseline.mjs', 'luau-chunk.mjs', 'luau-compat-check.mjs',
+    'luau-complexity.mjs', 'luau-dead-code.mjs', 'luau-diff-report.mjs',
+    'luau-docgen.mjs', 'luau-inspect.mjs', 'luau-pcall-audit.mjs',
+    'luau-perf-profile.mjs', 'luau-refactor.mjs', 'luau-regression-gate.mjs',
+    'luau-remote-map.mjs', 'luau-report.mjs', 'luau-security-scan.mjs',
+    'luau-snapshot.mjs', 'luau-symbol-map.mjs', 'luau-ui-map.mjs',
+    'luau-verify-features.mjs', 'luau-verify-flow.mjs',
+    'metrics.mjs', 'project-lint.mjs', 'upgrade.mjs',
+  ];
+  let missingLibs = 0;
+  for (const lib of expectedLibs) {
+    if (!fs.existsSync(path.join(libDir, lib))) {
+      issues.push(`Missing lib: ${lib}`);
+      missingLibs++;
+    }
+  }
+  if (missingLibs === 0) {
+    ok.push(`All ${expectedLibs.length} lib modules present`);
+  }
+
+  // 3. Brain format validation
+  if (fs.existsSync(workspace.brainCurrentPath)) {
+    try {
+      const brain = JSON.parse(fs.readFileSync(workspace.brainCurrentPath, 'utf8'));
+      const entries = Array.isArray(brain) ? brain : (brain.entries || []);
+      ok.push(`Brain format valid (${entries.length} entries)`);
+    } catch {
+      issues.push('Brain file is malformed JSON');
+    }
+  } else {
+    issues.push('Brain file not found');
+  }
+
+  // 4. Upgrade history format check
+  if (fs.existsSync(workspace.upgradeHistoryPath)) {
+    try {
+      const lines = fs.readFileSync(workspace.upgradeHistoryPath, 'utf8').trim().split(/\r?\n/).filter(Boolean);
+      let compactCount = 0;
+      for (const line of lines) {
+        const entry = JSON.parse(line);
+        if (typeof entry.agents === 'number') compactCount++;
+      }
+      if (compactCount > 0) {
+        issues.push(`Upgrade history: ${compactCount} compact-format entries (non-fatal, handled)`);
+      } else {
+        ok.push(`Upgrade history: ${lines.length} entries (full format)`);
+      }
+    } catch {
+      issues.push('Upgrade history file is malformed');
+    }
+  }
+
+  // 5. Memory files
+  const memDir = path.join(workspace.repoRoot, 'memory');
+  const memFiles = ['host/qwen.md', 'change/qwen.md', 'packs/qwen.md'];
+  let memOk = 0;
+  for (const f of memFiles) {
+    if (fs.existsSync(path.join(memDir, f))) memOk++;
+  }
+  if (memOk === memFiles.length) {
+    ok.push(`All ${memFiles.length} memory files present`);
+  } else {
+    issues.push(`Memory files: ${memOk}/${memFiles.length} present`);
+  }
+
+  // 6. Profile integrity
+  if (workspace.profile) {
+    ok.push(`Profile: ${workspace.activeProfileName} (${workspace.profile.name || 'unnamed'})`);
+  } else {
+    issues.push('Profile not loaded');
+  }
+
+  // 7. Duplicate function check
+  try {
+    const src = fs.readFileSync(path.join(scriptDir, 'agent-system.mjs'), 'utf8');
+    const funcNames = [...src.matchAll(/function (\w+)\(/g)].map(m => m[1]);
+    const dupes = funcNames.filter((n, i, a) => a.indexOf(n) !== i);
+    const uniqueDupes = [...new Set(dupes)];
+    if (uniqueDupes.length === 0) {
+      ok.push(`No duplicate function declarations`);
+    } else {
+      issues.push(`Duplicate functions: ${uniqueDupes.join(', ')}`);
+    }
+  } catch {
+    // Can't self-check, skip
+  }
+
+  // Render report
+  console.log('[AGENT SYSTEM DOCTOR]');
+  console.log('═'.repeat(52));
+  console.log(`  Version:  ${(function() { try { return JSON.parse(fs.readFileSync(path.join(scriptDir, '..', 'package.json'), 'utf8')).version; } catch { return 'unknown'; } })()}`);
+  console.log(`  Node:     ${process.version}`);
+  console.log(`  Platform: ${process.platform}-${process.arch}`);
+  console.log('');
+
+  if (ok.length > 0) {
+    console.log(`── Healthy (${ok.length}) ──────────────────────────────`);
+    for (const msg of ok) console.log(`  ✅ ${msg}`);
+    console.log('');
+  }
+
+  if (issues.length > 0) {
+    console.log(`── Issues (${issues.length}) ───────────────────────────`);
+    for (const msg of issues) console.log(`  ❌ ${msg}`);
+    console.log('');
+  }
+
+  const score = issues.length === 0 ? 100 : Math.max(0, 100 - issues.length * 15);
+  console.log(`  Health: ${score}/100`);
+  if (score >= 80) console.log('  Status: ✅ Healthy');
+  else if (score >= 50) console.log('  Status: ⚠️  Needs attention');
+  else console.log('  Status: 🔴 Critical issues found');
+  console.log('═'.repeat(52));
+
+  if (issues.length > 0 && score < 50) process.exit(1);
+}
+
+function handleLock(workspace, flags, positional) {
+  const taskName = flags.name || flags.task || positional[0] || 'unknown';
+  const taskType = flags.type || flags['task-type'] || 'feature-addition';
+  const target = flags.target || positional[1] || '';
+
+  const lock = {
+    kind: 'task-lock',
+    version: 1,
+    taskName,
+    taskType,
+    target,
+    profile: workspace.activeProfileName,
+    host: workspace.activeHostName,
+    timestamp: new Date().toISOString(),
+  };
+
+  console.log('[TASK LOCK]');
+  console.log('═'.repeat(52));
+  console.log(`  Task:   ${taskName}`);
+  console.log(`  Type:   ${taskType}`);
+  if (target) console.log(`  Target: ${target}`);
+  console.log(`  Profile: ${workspace.activeProfileName}`);
+  console.log(`  Host:    ${workspace.activeHostName}`);
+  console.log(`  Time:    ${lock.timestamp}`);
+  console.log('═'.repeat(52));
+  console.log('');
+  console.log('Route selection: use `agent-system route` to determine agent chain.');
+  console.log('Artifacts required: [TASK LOCK] markdown, handoff, delivery gate.');
+
+  if (flags.output) {
+    const outPath = path.resolve(flags.output);
+    fs.writeFileSync(outPath, JSON.stringify(lock, null, 2) + '\n', 'utf8');
+    console.log(`\nLock written to ${outPath}`);
   }
 }
