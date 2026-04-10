@@ -36,6 +36,9 @@ import { runDashboard, renderDashboard } from '../lib/dashboard.mjs';
 import { runLuauSymbolMap, renderSymbolMapJSON, renderSymbolMapMarkdown } from '../lib/luau-symbol-map.mjs';
 import { runLuauChunk, renderLuauChunk, renderLuauChunkJSON } from '../lib/luau-chunk.mjs';
 import { runLuauVerifyFlow, renderLuauVerifyFlow } from '../lib/luau-verify-flow.mjs';
+import { runLuauBaseline, renderBaselineMarkdown } from '../lib/luau-baseline.mjs';
+import { runProjectLint, renderProjectLint } from '../lib/project-lint.mjs';
+import { runLuauCompatCheck, renderLuauCompatCheck } from '../lib/luau-compat-check.mjs';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -155,6 +158,15 @@ async function main() {
       return;
     case 'luau-verify-flow':
       handleLuauVerifyFlow(workspace, flags, positional);
+      return;
+    case 'luau-baseline':
+      handleLuauBaseline(workspace, flags, positional);
+      return;
+    case 'project-lint':
+      handleProjectLint(workspace, flags, positional);
+      return;
+    case 'luau-compat-check':
+      handleLuauCompatCheck(workspace, flags, positional);
       return;
     case 'train':
       handleTrain(workspace, flags, positional);
@@ -573,6 +585,10 @@ function printHelp() {
     '  luau-chunk  Split monolithic script into logical modules (State, UI, Remote, Logic, Config)',
     '    --output-dir <dir>  Write chunk files to directory (default: stdout report)',
     '  luau-verify-flow Verify data flow: def-use chains, function signatures, remote completeness, callback connections, loop integrity',
+    '  luau-baseline  Generate complete feature baseline markdown (mandatory step-0 before migration/refactor)',
+    '    --output <file.md>  Write baseline to file (default: Feature Baselines/<Name>.md)',
+    '  project-lint   Full repo health check (manifest, brain, training, upgrade, memory, metrics, docs)',
+    '  luau-compat-check  Executor compatibility matrix (ScriptWare/Fluxus/Delta/Codex/Hydrogen) with fallback chains',
     '  train      Train multiple agents and sync training memory and docs',
     '    error    Record prevention rules instead of a success lesson',
     '    review   Review the latest host state without changing the route',
@@ -7762,6 +7778,61 @@ function handleLuauVerifyFlow(workspace, flags, positional) {
   console.log(rendered);
 
   if (result.verdict === 'FAIL') {
+    process.exit(1);
+  }
+}
+
+function handleLuauBaseline(workspace, flags, positional) {
+  const filePath = positional[0];
+  if (!filePath) {
+    console.error('Usage: agent-system luau-baseline <file.lua> [--output <file.md>]');
+    process.exit(1);
+  }
+
+  const baseline = runLuauBaseline(filePath);
+  const markdown = renderBaselineMarkdown(baseline);
+
+  let outPath;
+  if (flags.output) {
+    outPath = path.resolve(flags.output);
+  } else {
+    const baselineDir = path.join(workspace.repoRoot, 'Feature Baselines');
+    if (!fs.existsSync(baselineDir)) fs.mkdirSync(baselineDir, { recursive: true });
+    const baseName = path.basename(filePath, '.lua');
+    outPath = path.join(baselineDir, `${baseName}.md`);
+  }
+
+  fs.writeFileSync(outPath, markdown + '\n', 'utf8');
+  console.log(`Baseline written to ${outPath}`);
+  console.log(`  MD5: ${baseline.checksum.md5}`);
+  console.log(`  Features: ${baseline.features.length}`);
+  console.log(`  Remotes: ${baseline.remotes.length}`);
+  console.log(`  Functions: ${baseline.functions.length}`);
+  console.log(`  Loops: ${baseline.loops.length}`);
+}
+
+function handleProjectLint(workspace, flags, positional) {
+  const result = runProjectLint(workspace);
+  const rendered = renderProjectLint(result);
+  console.log(rendered);
+
+  if (result.verdict === 'FAIL') {
+    process.exit(1);
+  }
+}
+
+function handleLuauCompatCheck(workspace, flags, positional) {
+  const filePath = positional[0];
+  if (!filePath) {
+    console.error('Usage: agent-system luau-compat-check <file.lua>');
+    process.exit(1);
+  }
+
+  const result = runLuauCompatCheck(filePath);
+  const rendered = renderLuauCompatCheck(result);
+  console.log(rendered);
+
+  if (result.overallVerdict === 'INCOMPATIBLE') {
     process.exit(1);
   }
 }
