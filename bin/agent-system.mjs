@@ -8089,37 +8089,191 @@ function handleDoctor(workspace, flags) {
 }
 
 function handleLock(workspace, flags, positional) {
-  const taskName = flags.name || flags.task || positional[0] || 'unknown';
-  const taskType = flags.type || flags['task-type'] || 'feature-addition';
+  const taskName = flags.name || flags.task || positional[0] || 'unknown-task';
+  const taskTypeHint = flags.type || flags['task-type'] || '';
   const target = flags.target || positional[1] || '';
+  const intent = flags.intent || flags.summary || positional.slice(2).join(' ') || '';
 
-  const lock = {
-    kind: 'task-lock',
-    version: 1,
+  // Build task text for route selection
+  const taskText = [taskTypeHint, target, intent].filter(Boolean).join(' ');
+
+  // Use the profile's selectTaskType to resolve the route
+  const profile = workspace.profile;
+  const selection = selectTaskType(profile, taskText || 'unknown task');
+  const agents = (selection.route || []).map(role => ({
+    role,
+    domain: getAgentDomain(profile, role),
+  }));
+  const skills = selection.requiredSkills || [];
+  const artifacts = selection.requiredArtifacts || ['task-lock'];
+
+  const timestamp = new Date().toISOString();
+  const lockId = `lock-${timestamp.replace(/[:.]/g, '-').slice(0, 19)}`;
+
+  // Build the [TASK LOCK] markdown
+  const lockMarkdown = buildTaskLockMarkdown({
+    lockId,
     taskName,
-    taskType,
+    taskType: selection.taskType || taskTypeHint || 'unspecified',
+    target,
+    intent,
+    profile: workspace.activeProfileName,
+    host: workspace.activeHostName,
+    timestamp,
+    agents,
+    skills,
+    artifacts,
+  });
+
+  // Write lock file
+  const lockDir = path.join(workspace.repoRoot, 'docs', 'locks');
+  fs.mkdirSync(lockDir, { recursive: true });
+  const lockPath = path.join(lockDir, `${lockId}.md`);
+  fs.writeFileSync(lockPath, lockMarkdown + '\n', 'utf8');
+
+  // Also write to status/current.json for live presence
+  const statusPath = path.join(workspace.repoRoot, 'status', 'current.json');
+  const statusEntry = {
+    kind: 'task-lock',
+    lockId,
+    taskName,
+    taskType: selection.taskType,
     target,
     profile: workspace.activeProfileName,
     host: workspace.activeHostName,
-    timestamp: new Date().toISOString(),
+    timestamp,
+    route: agents.map(a => a.role).join(' → '),
   };
+  fs.writeFileSync(statusPath, JSON.stringify(statusEntry, null, 2) + '\n', 'utf8');
 
   console.log('[TASK LOCK]');
   console.log('═'.repeat(52));
-  console.log(`  Task:   ${taskName}`);
-  console.log(`  Type:   ${taskType}`);
-  if (target) console.log(`  Target: ${target}`);
+  console.log(`  Lock:    ${lockId}`);
+  console.log(`  Task:    ${taskName}`);
+  console.log(`  Type:    ${selection.taskType || taskTypeHint || 'auto-detected'}`);
+  if (target) console.log(`  Target:  ${target}`);
   console.log(`  Profile: ${workspace.activeProfileName}`);
   console.log(`  Host:    ${workspace.activeHostName}`);
-  console.log(`  Time:    ${lock.timestamp}`);
+  console.log(`  Route:   ${agents.map(a => a.role).join(' → ') || 'not determined'}`);
+  console.log(`  Skills:  ${skills.join(', ') || 'unspecified'}`);
+  console.log(`  Time:    ${timestamp}`);
   console.log('═'.repeat(52));
   console.log('');
-  console.log('Route selection: use `agent-system route` to determine agent chain.');
-  console.log('Artifacts required: [TASK LOCK] markdown, handoff, delivery gate.');
+  console.log(`  Lock file:  docs/locks/${lockId}.md`);
+  console.log(`  Status:     status/current.json`);
+  console.log('');
+  console.log('Agents in chain:');
+  for (const agent of agents) {
+    console.log(`  - ${agent.role} (${agent.domain})`);
+  }
+  console.log('');
+  console.log('Required artifacts:');
+  for (const artifact of artifacts) {
+    console.log(`  - [ ] ${artifact}`);
+  }
 
   if (flags.output) {
     const outPath = path.resolve(flags.output);
-    fs.writeFileSync(outPath, JSON.stringify(lock, null, 2) + '\n', 'utf8');
-    console.log(`\nLock written to ${outPath}`);
+    fs.writeFileSync(outPath, lockMarkdown + '\n', 'utf8');
+    console.log(`\nLock also written to: ${outPath}`);
+  }
+}
+
+function resolveRoute(workspace, taskType, target) {
+  const profile = workspace.profile;
+  if (!profile || !profile.routes) return null;
+
+  // Find matching route by task type
+  for (const routeKey of Object.keys(profile.routes)) {
+    const route = profile.routes[routeKey];
+    if (route.types && route.types.includes(taskType)) {
+      return {
+        agents: (route.agents || []).map(a => ({
+          role: a,
+          domain: getAgentDomain(profile, a),
+        })),
+        skills: route.skills || [],
+        artifacts: route.artifacts || ['task-lock'],
+      };
+    }
+  }
+
+  // Fallback: use default route
+  const defaultRoute = profile.routes.default || profile.routes['feature-addition'];
+  if (defaultRoute) {
+    return {
+      agents: (defaultRoute.agents || []).map(a => ({
+        role: a,
+        domain: getAgentDomain(profile, a),
+      })),
+      skills: defaultRoute.skills || [],
+      artifacts: defaultRoute.artifacts || ['task-lock'],
+    };
+  }
+
+  return null;
+}
+
+function getAgentDomain(profile, agentRole) {
+  if (!profile || !profile.agents) return 'general';
+  for (const agentKey of Object.keys(profile.agents)) {
+    const agent = profile.agents[agentKey];
+    if (agent.role === agentRole) return agent.domain || 'general';
+  }
+  return 'general';
+}
+
+function buildTaskLockMarkdown({ lockId, taskName, taskType, target, intent, profile, host, timestamp, agents, skills, artifacts }) {
+  const lines = [];
+  lines.push(`# [TASK LOCK] ${lockId}`);
+  lines.push('');
+  lines.push(`**Task:** ${taskName}`);
+  lines.push(`**Type:** ${taskType || 'unspecified'}`);
+  if (target) lines.push(`**Target:** ${target}`);
+  if (intent) lines.push(`**Intent:** ${intent}`);
+  lines.push('');
+  lines.push(`**Profile:** ${profile}`);
+  lines.push(`**Host:** ${host}`);
+  lines.push(`**Timestamp:** ${timestamp}`);
+  lines.push('');
+  lines.push('## Agent Chain');
+  lines.push('');
+  if (agents.length > 0) {
+    lines.push(`Route: ${agents.map(a => a.role).join(' → ')}`);
+    lines.push('');
+    for (const agent of agents) {
+      lines.push(`- **${agent.role}** (${agent.domain})`);
+    }
+  } else {
+    lines.push('Route: not determined — use `agent-system route` to select.');
+  }
+  lines.push('');
+  lines.push('## Skills');
+  lines.push('');
+  lines.push(skills.length > 0 ? skills.join(', ') : 'unspecified');
+  lines.push('');
+  lines.push('## Required Artifacts');
+  lines.push('');
+  for (const artifact of artifacts) {
+    lines.push(`- [ ] ${artifact}`);
+  }
+  lines.push('');
+  lines.push('## Stop-Line Risks');
+  lines.push('');
+  lines.push('- Do not invent agents outside the selected profile route.');
+  lines.push('- Do not deliver without all required artifacts.');
+  lines.push('- Do not close owned domains without handoff.');
+  lines.push('');
+  lines.push('---');
+  lines.push(`*Generated by agent-system v${getVersion()}*`);
+  return lines.join('\n');
+}
+
+function getVersion() {
+  const pkgPath = path.join(scriptDir, '..', 'package.json');
+  try {
+    return JSON.parse(fs.readFileSync(pkgPath, 'utf8')).version;
+  } catch {
+    return 'unknown';
   }
 }

@@ -98,20 +98,20 @@ The `imphub` profile covers the task families defined in the manifest.
 <!-- agent-system-upgrade-start -->
 ## Upgrade Sync
 
-Generated: 2026-04-09T23:32:33.022Z
+Generated: 2026-04-10T09:13:23.368Z
 Profile: imphub
 Host focus: qwen
-Mode: sync
-Outcome: synced
+Mode: apply
+Outcome: learned
 Agents upgraded: 11
-Learned: 11
-Reinforced: 0
+Learned: 0
+Reinforced: 11
 Blocked: 0
-Target: /storage/emulated/0/Download/work/agent-system/AGENTS.md
+Target: /data/data/com.termux/files/home/.qwen/extensions/agent-system/AGENTS.md
 
 ### Scriptmaster (logic)
-- Status: new
-- Confidence: 84
+- Status: reinforced
+- Confidence: 89
 - Lesson: Keep selector, dispatcher, and recovery ownership explicit.
 - Evidence: Task flow, runtime behavior, remotes, selectors, and action dispatch.
 - Keep selector, dispatcher, and recovery ownership explicit.
@@ -120,8 +120,8 @@ Target: /storage/emulated/0/Download/work/agent-system/AGENTS.md
 - Host sync target: qwen.
 
 ### Ui Designer (ui)
-- Status: new
-- Confidence: 84
+- Status: reinforced
+- Confidence: 89
 - Lesson: Keep visible wording, ToolTip coverage, and gated visibility aligned.
 - Evidence: LibSixtyTen layout, visible status text, section structure, and control grouping.
 - Keep visible wording, ToolTip coverage, and gated visibility aligned.
@@ -130,8 +130,8 @@ Target: /storage/emulated/0/Download/work/agent-system/AGENTS.md
 - Host sync target: qwen.
 
 ### Feature Framer (framing)
-- Status: new
-- Confidence: 84
+- Status: reinforced
+- Confidence: 89
 - Lesson: Make child controls read like subordinate actions, modes, or fallbacks.
 - Evidence: Parent-child meaning for new master-toggle groups.
 - Make child controls read like subordinate actions, modes, or fallbacks.
@@ -140,8 +140,8 @@ Target: /storage/emulated/0/Download/work/agent-system/AGENTS.md
 - Host sync target: qwen.
 
 ### Terminology Keeper (terminology)
-- Status: new
-- Confidence: 84
+- Status: reinforced
+- Confidence: 89
 - Lesson: Keep visible names stable across pages for the same concept.
 - Evidence: Visible labels, status wording, and cross-page naming consistency.
 - Keep visible names stable across pages for the same concept.
@@ -150,8 +150,8 @@ Target: /storage/emulated/0/Download/work/agent-system/AGENTS.md
 - Host sync target: qwen.
 
 ### Executor Specialist (compat)
-- Status: new
-- Confidence: 84
+- Status: reinforced
+- Confidence: 89
 - Lesson: Fail closed on unsupported executor paths.
 - Evidence: Executor gating, unsupported-path detection, and platform compatibility.
 - Fail closed on unsupported executor paths.
@@ -160,8 +160,8 @@ Target: /storage/emulated/0/Download/work/agent-system/AGENTS.md
 - Host sync target: qwen.
 
 ### Lifecycle Manager (lifecycle)
-- Status: new
-- Confidence: 84
+- Status: reinforced
+- Confidence: 89
 - Lesson: Preserve rebinds, respawn paths, and loop ownership boundaries.
 - Evidence: Respawn, character rebinds, and long-lived connection ownership.
 - Preserve rebinds, respawn paths, and loop ownership boundaries.
@@ -170,8 +170,8 @@ Target: /storage/emulated/0/Download/work/agent-system/AGENTS.md
 - Host sync target: qwen.
 
 ### Update Steward (update)
-- Status: new
-- Confidence: 84
+- Status: reinforced
+- Confidence: 89
 - Lesson: Preserve the allowed update scope and preserve-list features.
 - Evidence: Existing-script update scope and preserve-list features.
 - Preserve the allowed update scope and preserve-list features.
@@ -180,8 +180,8 @@ Target: /storage/emulated/0/Download/work/agent-system/AGENTS.md
 - Host sync target: qwen.
 
 ### Config Keeper (config)
-- Status: new
-- Confidence: 84
+- Status: reinforced
+- Confidence: 89
 - Lesson: Keep ownership explicit.
 - Evidence: Persistence, migration, and autoload synchronization.
 - Keep ownership explicit.
@@ -190,8 +190,8 @@ Target: /storage/emulated/0/Download/work/agent-system/AGENTS.md
 - Host sync target: qwen.
 
 ### Drawing Artist (esp)
-- Status: new
-- Confidence: 84
+- Status: reinforced
+- Confidence: 89
 - Lesson: Keep ownership explicit.
 - Evidence: Drawing API overlays and ESP rendering.
 - Keep ownership explicit.
@@ -200,8 +200,8 @@ Target: /storage/emulated/0/Download/work/agent-system/AGENTS.md
 - Host sync target: qwen.
 
 ### Optimizer (optimization)
-- Status: new
-- Confidence: 84
+- Status: reinforced
+- Confidence: 89
 - Lesson: Keep register pressure, memory churn, and connection cleanup in view.
 - Evidence: Performance, register pressure, memory, and connection cleanup.
 - Keep register pressure, memory churn, and connection cleanup in view.
@@ -210,8 +210,8 @@ Target: /storage/emulated/0/Download/work/agent-system/AGENTS.md
 - Host sync target: qwen.
 
 ### Qa Inspector (regression-proof)
-- Status: new
-- Confidence: 84
+- Status: reinforced
+- Confidence: 89
 - Lesson: Anchor delivery on a baseline and a clear regression matrix.
 - Evidence: Baseline comparison, regression matrices, and delivery gates.
 - Anchor delivery on a baseline and a clear regression matrix.

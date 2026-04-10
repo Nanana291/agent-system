@@ -1,10 +1,5 @@
 # Qwen Change Memory
 
-Change-specific lessons captured from Qwen runs live here.
+Change-specific lessons captured from gates and reflections live here.
 
-- Keep Luau examples compact and deterministic.
-- Keep repeated learning local to Qwen until it is clearly durable.
-
-- 2026-04-07T22:41:59.127Z Gate blocked for unknown change targeting unknown target; missing: intent/target, baseline, regression matrix, owned domains; risks: n/a.
-
-- Training lesson: Training lesson: keep Scriptmaster, Ui Designer, Feature Framer, Terminology Keeper aligned with the active profile, preserve the owned domains, and mirror durable notes into qwen memory. Source mode: idle.
+- No durable lessons recorded yet.
