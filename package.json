@@ -1,6 +1,6 @@
 {
   "name": "agent-system",
-  "version": "0.9.0.0",
+  "version": "0.10.0.0",
   "private": true,
   "type": "module",
   "description": "Agent-system CLI for validation, routing, sync, memory, and profile maintenance.",
@@ -123,6 +123,9 @@
     "luau-verify-flow": "node ./bin/agent-system.mjs luau-verify-flow",
     "luau-baseline": "node ./bin/agent-system.mjs luau-baseline",
     "project-lint": "node ./bin/agent-system.mjs project-lint",
-    "luau-compat-check": "node ./bin/agent-system.mjs luau-compat-check"
+    "luau-compat-check": "node ./bin/agent-system.mjs luau-compat-check",
+    "luau-snapshot": "node ./bin/agent-system.mjs luau-snapshot",
+    "luau-report": "node ./bin/agent-system.mjs luau-report",
+    "brain-diff": "node ./bin/agent-system.mjs brain-diff"
   }
 }

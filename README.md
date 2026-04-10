@@ -139,6 +139,14 @@ This release adds 3 commands for mandatory baselines, full repo health checks, a
 - **`project-lint`** — Full repository health check going beyond `validate`. Checks: manifest vs package.json version consistency, profile completeness (routes, domains), brain health (tag coverage, evidence coverage, quality distribution), memory state (host/pack/change memory), training staleness (>7 days), upgrade drift (>14 days), metric trail gaps, stale changes, doc coverage. Health score 0-100 with verdicts: FAIL / DEGRADED / WARN / HEALTHY. Exit code 1 on FAIL.
 - **`luau-compat-check`** — Scans a Luau script and generates a compatibility matrix across 5 executors (ScriptWare, Fluxus, Delta, Codex, Hydrogen). Detects 18+ APIs, classifies universal vs non-universal, identifies incompatibilities by severity (CRITICAL/HIGH/MEDIUM), recommends safe fallback chains (e.g., request() → game:HttpGet(), Drawing.new() → BillboardGui). Per-executor compatibility score and overall verdict: UNIVERSAL / PARTIAL / LIMITED / INCOMPATIBLE. Exit code 1 on INCOMPATIBLE.
 
+## V0.10.0.0 — Snapshot, Report & Brain Diff
+
+This release adds 3 commands for quality measurement, unified reporting, and brain state tracking:
+
+- **`luau-snapshot`** — Runs all quality checks in a single step: regression gate, security scan, complexity analysis, perf profile, pcall audit, dead code detection, flow verification, and compatibility check. Outputs a portable JSON snapshot with timestamp, checksums (MD5, SHA-256), per-category verdicts, and aggregate scores. Snapshots are saved to `.agent-snapshots/` or custom `--output` path. Use cases: (1) Before/after comparison — snapshot before refactor, another after, diff for trends. (2) CI/CD artifact — save snapshot on every commit. (3) Trend analysis — graph scores over time. (4) Release proof — all checks PASS as evidence.
+- **`luau-report`** — Generates a unified markdown quality report combining all checks: executive summary with overall score, score breakdown by category (security, performance, remote safety, code quality, dead code, data flow, compatibility), findings grouped by severity with details, prioritized recommendations, loop safety table, lifecycle status, configuration summary, and trend chart (if previous snapshots exist via `--snapshot-dir`). Output as markdown to stdout or `--output <file.md>`.
+- **`brain-diff`** — Compares brain states between current and a snapshot, history entry, or between two explicit files. Shows: entries added (with details), entries removed, entries modified (with field-level diff), scope changes (new/lost scopes). Supports `--snapshot-file` for comparing against a JSON file, `--before`/`--after` for comparing two files, or positional argument for history index. Output as markdown (default) or `--json` for structured data.
+
 ## Memory layer
 
 The repo now treats memory as flat and host-specific:

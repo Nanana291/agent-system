@@ -39,6 +39,9 @@ import { runLuauVerifyFlow, renderLuauVerifyFlow } from '../lib/luau-verify-flow
 import { runLuauBaseline, renderBaselineMarkdown } from '../lib/luau-baseline.mjs';
 import { runProjectLint, renderProjectLint } from '../lib/project-lint.mjs';
 import { runLuauCompatCheck, renderLuauCompatCheck } from '../lib/luau-compat-check.mjs';
+import { runLuauSnapshot, renderSnapshotJSON, renderSnapshotSummary } from '../lib/luau-snapshot.mjs';
+import { runLuauReport, renderReportMarkdown } from '../lib/luau-report.mjs';
+import { runBrainDiff, renderBrainDiff, renderBrainDiffJSON } from '../lib/brain-diff.mjs';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -167,6 +170,15 @@ async function main() {
       return;
     case 'luau-compat-check':
       handleLuauCompatCheck(workspace, flags, positional);
+      return;
+    case 'luau-snapshot':
+      handleLuauSnapshot(workspace, flags, positional);
+      return;
+    case 'luau-report':
+      handleLuauReport(workspace, flags, positional);
+      return;
+    case 'brain-diff':
+      handleBrainDiff(workspace, flags, positional);
       return;
     case 'train':
       handleTrain(workspace, flags, positional);
@@ -446,6 +458,26 @@ function parseArgs(argv) {
       i += 1;
       continue;
     }
+    if (arg === '--snapshot-file') {
+      flags.snapshotFile = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--before') {
+      flags.before = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--after') {
+      flags.after = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--snapshot-dir') {
+      flags.snapshotDir = argv[i + 1];
+      i += 1;
+      continue;
+    }
     if (arg === '--classification') {
       flags.classification = argv[i + 1];
       i += 1;
@@ -589,6 +621,14 @@ function printHelp() {
     '    --output <file.md>  Write baseline to file (default: Feature Baselines/<Name>.md)',
     '  project-lint   Full repo health check (manifest, brain, training, upgrade, memory, metrics, docs)',
     '  luau-compat-check  Executor compatibility matrix (ScriptWare/Fluxus/Delta/Codex/Hydrogen) with fallback chains',
+    '  luau-snapshot  Combined quality snapshot: runs all checks in one step, outputs portable JSON with per-category verdicts',
+    '    --output <file.json>  Save snapshot to file',
+    '  luau-report  Unified quality report as markdown: executive summary, score breakdown, findings, recommendations, compatibility, trend',
+    '    --output <file.md>  Write report to file (default: stdout)',
+    '    --snapshot-dir <dir>  Include trend chart from previous snapshots',
+    '  brain-diff  Compare brain states: added, removed, modified entries between current and snapshot/history',
+    '    --snapshot-file <file.json>  Compare against a snapshot file',
+    '    --before <file> --after <file>  Compare two explicit files',
     '  train      Train multiple agents and sync training memory and docs',
     '    error    Record prevention rules instead of a success lesson',
     '    review   Review the latest host state without changing the route',
@@ -1203,7 +1243,7 @@ function handleMemory(workspace, flags, positional) {
     return;
   }
 
-  if (action === 'stats') {
+  if (action === 'stats' || action === 'status') {
     handleMemoryStats(workspace);
     return;
   }
@@ -4704,6 +4744,18 @@ function handleBrain(workspace, flags, positional) {
     handleBrainList(workspace, flags, positional.slice(1));
     return;
   }
+  if (action === 'stats') {
+    handleBrainStats(workspace, flags, positional.slice(1));
+    return;
+  }
+  if (action === 'export') {
+    handleBrainExport(workspace, flags, positional.slice(1));
+    return;
+  }
+  if (action === 'import') {
+    handleBrainImport(workspace, flags, positional.slice(1));
+    return;
+  }
   console.error(`Unknown brain action: ${action}`);
   process.exit(1);
 }
@@ -5122,7 +5174,9 @@ function readUpgradeHistory(workspace) {
 function buildUpgradeHistoryIndex(history) {
   const index = new Map();
   for (const entry of history) {
-    for (const agent of entry.agents || []) {
+    // Skip entries without an agents array (compact format stores agents as a number)
+    const agents = Array.isArray(entry.agents) ? entry.agents : [];
+    for (const agent of agents) {
       const key = normalize(String(agent.lessonKey || `${agent.title || ''}:${agent.lesson || ''}`));
       if (!key) continue;
       index.set(key, {
@@ -7834,5 +7888,46 @@ function handleLuauCompatCheck(workspace, flags, positional) {
 
   if (result.overallVerdict === 'INCOMPATIBLE') {
     process.exit(1);
+  }
+}
+
+function handleLuauSnapshot(workspace, flags, positional) {
+  const filePath = positional[0];
+  if (!filePath) {
+    console.error('Usage: agent-system luau-snapshot <file.lua> [--output <file.json>]');
+    process.exit(1);
+  }
+
+  const result = runLuauSnapshot(filePath);
+  const summary = renderSnapshotSummary(result);
+  console.log(summary);
+
+  if (flags.output) {
+    const outPath = path.resolve(flags.output);
+    fs.writeFileSync(outPath, renderSnapshotJSON(result) + '\n', 'utf8');
+    console.log(`Snapshot saved to ${outPath}`);
+  }
+
+  if (result.verdict === 'FAIL') {
+    process.exit(1);
+  }
+}
+
+function handleLuauReport(workspace, flags, positional) {
+  const filePath = positional[0];
+  if (!filePath) {
+    console.error('Usage: agent-system luau-report <file.lua> [--output <file.md>] [--snapshot-dir <dir>]');
+    process.exit(1);
+  }
+
+  const result = runLuauReport(filePath, { snapshotDir: flags.snapshotDir });
+  const markdown = renderReportMarkdown(result);
+
+  if (flags.output) {
+    const outPath = path.resolve(flags.output);
+    fs.writeFileSync(outPath, markdown + '\n', 'utf8');
+    console.log(`Report written to ${outPath}`);
+  } else {
+    console.log(markdown);
   }
 }
